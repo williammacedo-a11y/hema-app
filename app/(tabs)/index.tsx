@@ -8,14 +8,19 @@ import {
   StatusBar,
   ActivityIndicator,
   Image,
+  TextInput,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import debounce from "lodash.debounce";
 
-import { getProducts } from "@/services/products";
+import { getProducts, searchProducts } from "@/services/products";
 import { Product } from "@/types/product";
 import { styles } from "../../styles/home.styles";
 import { useCart } from "@/context/CartContext";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 const CATEGORIES = [
   { id: "1", name: "Whey", icon: "shaker-outline" },
@@ -28,12 +33,16 @@ const CATEGORIES = [
 export default function HomeScreen() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Product[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
 
   const router = useRouter();
+  const { id } = useLocalSearchParams();
   const { addToCart } = useCart();
 
+  // 🔹 Load inicial (vitrine)
   useEffect(() => {
     async function load() {
       try {
@@ -48,12 +57,36 @@ export default function HomeScreen() {
     load();
   }, []);
 
-  const formatPrice = (price: number) => {
-    return price.toLocaleString("pt-BR", {
+  // 🔹 Debounce search
+  const debouncedSearch = useMemo(
+    () =>
+      debounce(async (query: string) => {
+        if (!query.trim()) {
+          setSearchResults([]);
+          setSearchLoading(false);
+          return;
+        }
+
+        setSearchLoading(true);
+        const results = await searchProducts(query);
+        setSearchResults(results);
+        setSearchLoading(false);
+      }, 350),
+    [],
+  );
+
+  useEffect(() => {
+    debouncedSearch(searchQuery);
+    return () => {
+      debouncedSearch.cancel();
+    };
+  }, [searchQuery]);
+
+  const formatPrice = (price?: number) =>
+    (price ?? 0).toLocaleString("pt-BR", {
       style: "currency",
       currency: "BRL",
     });
-  };
 
   const normalizeText = (text?: string) => {
     if (!text) return "";
@@ -63,31 +96,40 @@ export default function HomeScreen() {
       .toLowerCase();
   };
 
-  // 2. LÓGICA CORRIGIDA: Filtra apenas pelo NOME do produto
+  // 🔹 Função para Primeira Letra Maiúscula
+  const capitalizeFirstLetter = (text?: string) => {
+    if (!text) return "";
+    const lower = text.toLowerCase();
+    return lower.charAt(0).toUpperCase() + lower.slice(1);
+  };
+
+  // 🔥 LÓGICA FINAL DE EXIBIÇÃO
   const displayedProducts = useMemo(() => {
-    if (!selectedCategory) {
-      return allProducts.slice(0, 6);
+    // 1️⃣ Se estiver buscando → usar resultado do banco
+    if (searchQuery.trim()) {
+      return searchResults;
     }
 
-    const query = normalizeText(selectedCategory);
-    return allProducts
-      .filter((p) => {
-        const nName = normalizeText(p.name);
-        // Agora verifica apenas se a palavra da categoria está no TÍTULO
-        return nName.includes(query);
-      })
-      .slice(0, 10);
-  }, [allProducts, selectedCategory]);
+    // 2️⃣ Se categoria selecionada → filtrar localmente
+    if (selectedCategory) {
+      const query = normalizeText(selectedCategory);
+      return allProducts
+        .filter((p) => normalizeText(p.name).includes(query))
+        .slice(0, 10);
+    }
+
+    // 3️⃣ Caso padrão → vitrine inicial
+    return allProducts.slice(0, 6);
+  }, [searchQuery, searchResults, selectedCategory, allProducts]);
 
   const randomOffers = useMemo(() => {
+    if (searchQuery.trim()) return [];
+
     const displayedIds = displayedProducts.map((p) => p.id);
+    const available = allProducts.filter((p) => !displayedIds.includes(p.id));
 
-    const availableForOffers = allProducts.filter(
-      (p) => !displayedIds.includes(p.id),
-    );
-
-    return [...availableForOffers].sort(() => 0.5 - Math.random()).slice(0, 5);
-  }, [allProducts, displayedProducts]);
+    return [...available].sort(() => 0.5 - Math.random()).slice(0, 5);
+  }, [allProducts, displayedProducts, searchQuery]);
 
   const handleAddAndNavigate = async (product: Product) => {
     await addToCart({
@@ -105,15 +147,8 @@ export default function HomeScreen() {
     <TouchableOpacity
       style={styles.productCard}
       activeOpacity={0.9}
-      onPress={() =>
-        router.push({
-          pathname: "/product/[id]",
-          params: {
-            id: item.id,
-            data: JSON.stringify(item),
-          },
-        })
-      }
+      // 🔹 Correção da Navegação
+      onPress={() => router.push(`/product/${item.id}`)}
     >
       {item.image_url ? (
         <Image
@@ -121,11 +156,29 @@ export default function HomeScreen() {
           style={styles.productImagePlaceholder}
         />
       ) : (
-        <View style={styles.productImagePlaceholder} />
+        // 🔹 Correção do Placeholder
+        <View
+          style={[
+            styles.productImagePlaceholder,
+            {
+              backgroundColor: "#f0f0f0",
+              justifyContent: "center",
+              alignItems: "center",
+            },
+          ]}
+        >
+          <MaterialCommunityIcons
+            name="image-off-outline"
+            size={40}
+            color="#ccc"
+          />
+        </View>
       )}
+
       <View style={styles.productInfo}>
         <Text style={styles.productName} numberOfLines={2}>
-          {item.name}
+          {/* 🔹 Correção da Letra Maiúscula */}
+          {capitalizeFirstLetter(item.name)}
         </Text>
         <Text style={styles.productPrice}>{formatPrice(item.price)}</Text>
 
@@ -140,170 +193,270 @@ export default function HomeScreen() {
   );
 
   return (
-    <View style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: "#E31837" }}
+      edges={["top"]}
+    >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <StatusBar barStyle="light-content" backgroundColor="#E31837" />
 
-      {loading ? (
         <View
-          style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+          style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 }}
         >
-          <ActivityIndicator size="large" color="#E31837" />
-          <Text style={{ marginTop: 10, color: "#666" }}>
-            Carregando cereais...
-          </Text>
-        </View>
-      ) : (
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          style={styles.container}
-        >
-          {/* BANNER */}
-          <View style={styles.promoBanner}>
-            <Text style={styles.promoTitle}>Promoção da Semana</Text>
-            <Text style={styles.promoSubtitle}>
-              Qualidade selecionada para você
-            </Text>
-            <TouchableOpacity style={styles.promoButton}>
-              <Text style={styles.promoButtonText}>Ver ofertas</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* CATEGORIAS */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitleText}>Categorias</Text>
-            {selectedCategory && (
-              <TouchableOpacity onPress={() => setSelectedCategory(null)}>
-                <Text
-                  style={{ color: "#E31837", fontSize: 12, fontWeight: "bold" }}
-                >
-                  Ver todos
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoriesContainer}
+          {/* LINHA SUPERIOR */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 18,
+            }}
           >
-            {CATEGORIES.map((cat) => {
-              const isActive = selectedCategory === cat.name;
-              return (
-                <TouchableOpacity
-                  key={cat.id}
-                  style={styles.categoryItem}
-                  onPress={() =>
-                    setSelectedCategory(isActive ? null : cat.name)
-                  }
-                >
-                  <View
-                    style={[
-                      styles.categoryCircle,
-                      isActive && {
-                        backgroundColor: "#E31837",
-                        borderColor: "#E31837",
-                      },
-                    ]}
-                  >
-                    <MaterialCommunityIcons
-                      name={cat.icon as any}
-                      size={24}
-                      color={isActive ? "#FFF" : "#666"}
-                    />
-                  </View>
-                  <Text
-                    style={[
-                      styles.categoryText,
-                      isActive && { fontWeight: "bold", color: "#E31837" },
-                    ]}
-                  >
-                    {cat.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-
-          {/* DESTAQUES FILTRADOS */}
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitleText}>
-              {selectedCategory
-                ? `Destaques em ${selectedCategory}`
-                : "Produtos em Destaque"}
-            </Text>
-          </View>
-          <FlatList
-            data={displayedProducts}
-            renderItem={renderProduct}
-            keyExtractor={(item) => item.id}
-            numColumns={2}
-            scrollEnabled={false}
-            columnWrapperStyle={styles.productGridRow}
-            contentContainerStyle={styles.productGridContainer}
-            ListEmptyComponent={
-              <Text style={{ textAlign: "center", margin: 20 }}>
-                Nenhum produto encontrado nesta categoria.
-              </Text>
-            }
-          />
-
-          {/* OFERTAS */}
-          {randomOffers.length > 0 && (
-            <>
-              <View style={styles.sectionHeader}>
-                <Text style={styles.sectionTitleText}>Outras Ofertas</Text>
-              </View>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.offersContainer}
+            <View>
+              <Text
+                style={{
+                  color: "#FFF",
+                  fontSize: 14,
+                  opacity: 0.85,
+                }}
               >
-                {randomOffers.map((offer) => (
-                  <View key={offer.id} style={styles.offerCard}>
-                    {offer.image_url ? (
-                      <Image
-                        source={{ uri: offer.image_url }}
-                        style={styles.offerImagePlaceholder}
-                      />
-                    ) : (
-                      <View style={styles.offerImagePlaceholder} />
-                    )}
-                    <Text style={styles.offerName} numberOfLines={1}>
-                      {offer.name}
-                    </Text>
-                    <Text style={styles.promoPriceText}>
-                      {formatPrice(offer.price)}
-                    </Text>
+                Bem-vindo
+              </Text>
+              <Text
+                style={{
+                  color: "#FFF",
+                  fontSize: 22,
+                  fontWeight: "bold",
+                }}
+              >
+                Hema Cereais
+              </Text>
+            </View>
 
-                    <TouchableOpacity
-                      style={{
-                        marginTop: 8,
-                        backgroundColor: "#F0F0F0",
-                        padding: 4,
-                        borderRadius: 4,
-                        alignItems: "center",
-                      }}
-                      onPress={() => handleAddAndNavigate(offer)}
-                    >
-                      <Text
-                        style={{
-                          color: "#E31837",
-                          fontSize: 10,
-                          fontWeight: "bold",
-                        }}
-                      >
-                        + ADICIONAR
-                      </Text>
-                    </TouchableOpacity>
+            {/* Avatar */}
+            <View
+              style={{
+                width: 42,
+                height: 42,
+                borderRadius: 21,
+                backgroundColor: "#FFF",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ color: "#E31837", fontWeight: "bold" }}>HC</Text>
+            </View>
+          </View>
+
+          {/* SEARCH */}
+          <View
+            style={{
+              backgroundColor: "#FFF",
+              borderRadius: 16,
+              paddingHorizontal: 16,
+              paddingVertical: 12,
+              flexDirection: "row",
+              alignItems: "center",
+            }}
+          >
+            <MaterialCommunityIcons
+              name="magnify"
+              size={20}
+              color="#999"
+              style={{ marginRight: 8 }}
+            />
+
+            <TextInput
+              placeholder="Buscar produtos..."
+              placeholderTextColor="#999"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+              onSubmitEditing={() => Keyboard.dismiss()}
+              style={{
+                flex: 1,
+                fontSize: 14,
+              }}
+            />
+          </View>
+        </View>
+
+        <View style={{ flex: 1, backgroundColor: "#FFF" }}>
+          {loading ? (
+            <View
+              style={{
+                flex: 1,
+                justifyContent: "center",
+                alignItems: "center",
+              }}
+            >
+              <ActivityIndicator size="large" color="#E31837" />
+              <Text style={{ marginTop: 10, color: "#666" }}>
+                Carregando cereais...
+              </Text>
+            </View>
+          ) : (
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              style={styles.container}
+            >
+              {/* CATEGORIAS - só se não estiver buscando */}
+              {!searchQuery.trim() && (
+                <>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitleText}>Categorias</Text>
                   </View>
-                ))}
-              </ScrollView>
-            </>
-          )}
 
-          <View style={{ height: 40 }} />
-        </ScrollView>
-      )}
-    </View>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.categoriesContainer}
+                  >
+                    {CATEGORIES.map((cat) => {
+                      const isActive = selectedCategory === cat.name;
+
+                      return (
+                        <TouchableOpacity
+                          key={cat.id}
+                          style={styles.categoryItem}
+                          onPress={() =>
+                            setSelectedCategory(isActive ? null : cat.name)
+                          }
+                        >
+                          <View
+                            style={[
+                              styles.categoryCircle,
+                              isActive && {
+                                backgroundColor: "#E31837",
+                                borderColor: "#E31837",
+                              },
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name={cat.icon as any}
+                              size={24}
+                              color={isActive ? "#FFF" : "#666"}
+                            />
+                          </View>
+                          <Text style={styles.categoryText}>{cat.name}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </>
+              )}
+
+              {/* RESULTADOS */}
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitleText}>
+                  {searchQuery.trim()
+                    ? `Resultados para "${searchQuery}"`
+                    : selectedCategory
+                      ? `Destaques em ${selectedCategory}`
+                      : "Produtos em Destaque"}
+                </Text>
+              </View>
+
+              {searchLoading ? (
+                <ActivityIndicator size="small" color="#E31837" />
+              ) : (
+                <FlatList
+                  data={displayedProducts}
+                  renderItem={renderProduct}
+                  keyExtractor={(item) => item.id}
+                  numColumns={2}
+                  scrollEnabled={false}
+                  columnWrapperStyle={styles.productGridRow}
+                  contentContainerStyle={styles.productGridContainer}
+                  ListEmptyComponent={
+                    <Text style={{ textAlign: "center", margin: 20 }}>
+                      Nenhum produto encontrado.
+                    </Text>
+                  }
+                />
+              )}
+
+              {/* OFERTAS - só fora do modo busca */}
+              {!searchQuery.trim() && randomOffers.length > 0 && (
+                <>
+                  <View style={styles.sectionHeader}>
+                    <Text style={styles.sectionTitleText}>Outras Ofertas</Text>
+                  </View>
+
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.offersContainer}
+                  >
+                    {randomOffers.map((offer) => (
+                      <TouchableOpacity
+                        key={offer.id}
+                        style={styles.offerCard}
+                        onPress={() => router.push(`/product/${offer.id}`)}
+                      >
+                        {offer.image_url ? (
+                          <Image
+                            source={{ uri: offer.image_url }}
+                            style={styles.offerImagePlaceholder}
+                          />
+                        ) : (
+                          // 🔹 Correção do Placeholder
+                          <View
+                            style={[
+                              styles.offerImagePlaceholder,
+                              {
+                                backgroundColor: "#f0f0f0",
+                                justifyContent: "center",
+                                alignItems: "center",
+                              },
+                            ]}
+                          >
+                            <MaterialCommunityIcons
+                              name="image-off-outline"
+                              size={24}
+                              color="#ccc"
+                            />
+                          </View>
+                        )}
+                        <Text style={styles.offerName} numberOfLines={1}>
+                          {/* 🔹 Correção da Letra Maiúscula */}
+                          {capitalizeFirstLetter(offer.name)}
+                        </Text>
+                        <Text style={styles.promoPriceText}>
+                          {formatPrice(offer.price)}
+                        </Text>
+
+                        <TouchableOpacity
+                          style={{
+                            marginTop: 8,
+                            backgroundColor: "#F0F0F0",
+                            padding: 6,
+                            borderRadius: 6,
+                            alignItems: "center",
+                          }}
+                          onPress={() => handleAddAndNavigate(offer)}
+                        >
+                          <Text
+                            style={{
+                              color: "#E31837",
+                              fontSize: 10,
+                              fontWeight: "bold",
+                            }}
+                          >
+                            + ADICIONAR
+                          </Text>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+
+              <View style={{ height: 40 }} />
+            </ScrollView>
+          )}
+        </View>
+      </TouchableWithoutFeedback>
+    </SafeAreaView>
   );
 }

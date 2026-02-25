@@ -68,3 +68,45 @@ export async function getProducts(): Promise<Product[]> {
     };
   });
 }
+
+export async function searchProducts(query: string): Promise<Product[]> {
+  if (!query.trim()) return [];
+
+  const response = await fetch(
+    `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/hybrid-search`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+        Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ query }),
+    },
+  );
+
+  if (!response.ok) {
+    console.error("Erro na Edge Function");
+    return [];
+  }
+
+  const data = await response.json();
+
+  return (data ?? []).map((item: any) => {
+    const rawPrice = item.preço
+      ? String(item.preço)
+          .replace(/[^\d,]/g, "")
+          .replace(",", ".")
+      : "0";
+
+    return {
+      id: item.id,
+      name: item.nome,
+      price: parseFloat(rawPrice) || 0,
+      quantity: Number(item.quantidade) || 0,
+      description: item.descricao ?? "",
+      image_url: item.url_imagem ?? "",
+      createdAt: item.created_at,
+    };
+  });
+}
