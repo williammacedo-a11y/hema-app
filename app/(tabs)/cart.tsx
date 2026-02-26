@@ -8,8 +8,9 @@ import {
   Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { useRouter } from 'expo-router';
+import { useRouter } from "expo-router";
 import { styles } from "../../styles/cart.styles";
 import { useCart } from "@/context/CartContext";
 import { CartItem } from "@/services/cart";
@@ -95,41 +96,49 @@ export default function CartScreen() {
   );
 
   return (
-    <View style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top"]}>
+      <View style={{ flex: 1 }}>
+        <StatusBar barStyle="dark-content" />
 
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Meu Carrinho</Text>
-        </View>
-
-        {/* Lista de Produtos Reais do Banco */}
-        <FlatList
-          data={cartItems}
-          renderItem={renderCartItem}
-          keyExtractor={(item) => item.nome} // Chave única baseada no nome
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <Text style={styles.emptyCartText}>Seu carrinho está vazio.</Text>
-          }
-        />
-
-        {/* Resumo e Botão Finalizar */}
-        {cartItems.length > 0 && (
-          <View style={styles.footerContainer}>
-            <View style={styles.subtotalRow}>
-              <Text style={styles.subtotalLabel}>Subtotal</Text>
-              <Text style={styles.subtotalValue}>{formatPrice(subtotal)}</Text>
-            </View>
-
-            <TouchableOpacity style={styles.checkoutButton} activeOpacity={0.8} onPress={() => router.push('/checkout')}>
-              <Text style={styles.checkoutButtonText}>Finalizar Compra</Text>
-            </TouchableOpacity>
+        <View style={styles.container}>
+          {/* Header */}
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>Meu Carrinho</Text>
           </View>
-        )}
+
+          {/* Lista de Produtos Reais do Banco */}
+          <FlatList
+            data={cartItems}
+            renderItem={renderCartItem}
+            keyExtractor={(item) => item.nome} // Chave única baseada no nome
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            ListEmptyComponent={
+              <Text style={styles.emptyCartText}>Seu carrinho está vazio.</Text>
+            }
+          />
+
+          {/* Resumo e Botão Finalizar */}
+          {cartItems.length > 0 && (
+            <View style={styles.footerContainer}>
+              <View style={styles.subtotalRow}>
+                <Text style={styles.subtotalLabel}>Subtotal</Text>
+                <Text style={styles.subtotalValue}>
+                  {formatPrice(subtotal)}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.checkoutButton}
+                activeOpacity={0.8}
+                onPress={() => router.push("/checkout")}
+              >
+                <Text style={styles.checkoutButtonText}>Finalizar Compra</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
       </View>
-    </View>
+    </SafeAreaView>
   );
 }

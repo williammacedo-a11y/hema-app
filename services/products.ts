@@ -69,8 +69,15 @@ export async function getProducts(): Promise<Product[]> {
   });
 }
 
-export async function searchProducts(query: string): Promise<Product[]> {
-  if (!query.trim()) return [];
+type SearchResult = {
+  products: Product[];
+  maxScore: number;
+};
+
+export async function searchProducts(query: string): Promise<SearchResult> {
+  if (!query.trim()) {
+    return { products: [], maxScore: 0 };
+  }
 
   const response = await fetch(
     `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/hybrid-search`,
@@ -87,12 +94,20 @@ export async function searchProducts(query: string): Promise<Product[]> {
 
   if (!response.ok) {
     console.error("Erro na Edge Function");
-    return [];
+    return { products: [], maxScore: 0 };
   }
 
   const data = await response.json();
 
-  return (data ?? []).map((item: any) => {
+  // Resultados de pesquisa ordenados por score de similaridade com a query
+  // console.log("\n\nQuery:", query);
+  // console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
+
+  data?.forEach((item: any, index: number) => {
+    console.log(`#${index} | ${item.nome ?? item.name} | score: ${item.score}`);
+  });
+
+  const mapped: Product[] = (data ?? []).map((item: any) => {
     const rawPrice = item.preço
       ? String(item.preço)
           .replace(/[^\d,]/g, "")
@@ -107,6 +122,14 @@ export async function searchProducts(query: string): Promise<Product[]> {
       description: item.descricao ?? "",
       image_url: item.url_imagem ?? "",
       createdAt: item.created_at,
+      score: item.score ?? 0,
     };
   });
+
+  const maxScore = mapped.length > 0 ? (mapped[0].score ?? 0) : 0;
+
+  return {
+    products: mapped,
+    maxScore,
+  };
 }

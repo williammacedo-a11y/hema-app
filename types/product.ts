@@ -6,4 +6,5 @@ export interface Product {
   image_url: string;
   description: string;
   createdAt: string;
+  score?: number;
 }

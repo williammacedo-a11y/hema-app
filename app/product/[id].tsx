@@ -1,28 +1,109 @@
-import React from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useEffect, useState } from "react";
+import { supabase } from "../../services/supabase";
 import {
-  View,
-  Text,
   Image,
   ScrollView,
-  TouchableOpacity,
   StatusBar,
+  Text,
+  TouchableOpacity,
+  View,
+  ActivityIndicator,
 } from "react-native";
-import { useLocalSearchParams, useRouter } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 
-import { styles } from "../../styles/product.styles";
 import { useCart } from "@/context/CartContext";
 import { Product } from "@/types/product";
+import { styles } from "../../styles/product.styles";
 
 export default function ProductDetailsScreen() {
   const router = useRouter();
   const { addToCart } = useCart();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [similarProducts, setSimilarProducts] = useState<Product[]>([]);
 
-  // Pega os parâmetros passados na rota
-  const { data } = useLocalSearchParams<{ data: string }>();
+  useEffect(() => {
+    async function loadProduct() {
+      if (!id) return;
 
-  // Como passamos via string, precisamos transformar de volta em Objeto
-  const product: Product | null = data ? JSON.parse(data) : null;
+      const { data, error } = await supabase
+        .from("produtos_hema_cereais")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (!error && data) {
+        setProduct({
+          id: data.id,
+          name: data.nome,
+          price: data.preço,
+          quantity: Number(data.quantidade),
+          description: data.descricao ?? "",
+          image_url: data.url_imagem ?? "",
+          createdAt: data.created_at,
+        });
+      }
+
+      const { data: doc } = await supabase
+        .from("documents")
+        .select("embedding")
+        .eq("id_produto", id)
+        .single();
+
+      if (doc?.embedding) {
+        const { data: similarDocs } = await supabase.rpc(
+          "match_similar_products",
+          {
+            query_embedding: doc.embedding,
+            current_id: id,
+            match_count: 10,
+          },
+        );
+
+        if (similarDocs?.length) {
+          const ids = similarDocs.map((d: any) => d.id_produto);
+
+          const { data: products } = await supabase
+            .from("produtos_hema_cereais")
+            .select("*")
+            .in("id", ids);
+
+          if (products) {
+            setSimilarProducts(
+              products.map((p: any) => ({
+                id: p.id,
+                name: p.nome,
+                price: p.preço,
+                quantity: Number(p.quantidade),
+                description: p.descricao ?? "",
+                image_url: p.url_imagem ?? "",
+                createdAt: p.created_at,
+              })),
+            );
+          }
+        }
+      }
+
+      setLoading(false);
+    }
+
+    loadProduct();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <View
+        style={[
+          styles.safeArea,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#E31837" />
+      </View>
+    );
+  }
 
   if (!product) {
     return (
@@ -111,6 +192,35 @@ export default function ProductDetailsScreen() {
               "Nenhuma descrição disponível para este produto."}
           </Text>
         </View>
+
+        {similarProducts.length > 0 && (
+          <View style={{ marginTop: 20 }}>
+            <Text
+              style={{ fontSize: 16, fontWeight: "bold", marginBottom: 10 }}
+            >
+              Produtos similares
+            </Text>
+
+            {similarProducts.map((item) => (
+              <TouchableOpacity
+                key={item.id}
+                onPress={() => router.push(`/product/${item.id}`)}
+                style={{ flexDirection: "row", marginBottom: 12 }}
+              >
+                <Image
+                  source={{ uri: item.image_url }}
+                  style={{ width: 60, height: 60, borderRadius: 8 }}
+                />
+                <View style={{ marginLeft: 10, flex: 1 }}>
+                  <Text numberOfLines={2}>{item.name}</Text>
+                  <Text style={{ fontWeight: "bold" }}>
+                    {formatPrice(item.price)}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
       {/* RODAPÉ FIXO */}
