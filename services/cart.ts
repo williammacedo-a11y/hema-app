@@ -11,7 +11,7 @@ export interface CartItem {
 }
 
 // Usando o ID que você forneceu. Futuramente virá do Auth do usuário logado.
-const CLIENTE_ID = "554185252319";
+const CLIENTE_ID = "554184418576";
 
 export async function getCartFromDB(): Promise<CartItem[]> {
   try {

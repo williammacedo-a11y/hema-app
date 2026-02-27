@@ -1,33 +1,45 @@
-import React, { useState, useEffect, useMemo } from "react";
-import {
-  Text,
-  View,
-  ScrollView,
-  FlatList,
-  TouchableOpacity,
-  StatusBar,
-  ActivityIndicator,
-  Image,
-  TextInput,
-  Keyboard,
-  TouchableWithoutFeedback,
-} from "react-native";
-import { useRouter, useLocalSearchParams } from "expo-router";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import debounce from "lodash.debounce";
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  FlatList,
+  Image,
+  Keyboard,
+  ScrollView,
+  StatusBar,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  TouchableWithoutFeedback,
+  View,
+} from "react-native";
 
+import { useCart } from "@/context/CartContext";
 import { getProducts, searchProducts } from "@/services/products";
 import { Product } from "@/types/product";
-import { styles } from "../../styles/home.styles";
-import { useCart } from "@/context/CartContext";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { styles } from "../../styles/home.styles";
+import SkeletonCard, { SkeletonGrid } from "@/components/SkeletonCard";
 
 const CATEGORIES = [
-  { id: "1", name: "Whey", icon: "shaker-outline" },
-  { id: "2", name: "Creatina", icon: "dumbbell" },
-  { id: "3", name: "Granola", icon: "bowl-mix-outline" },
-  { id: "4", name: "Sementes", icon: "seed-outline" },
-  { id: "5", name: "Cereais", icon: "barley" },
+  // --- SUPLEMENTAÇÃO ---
+  { id: "1", name: "Whey", icon: "shaker-outline" }, // Whey, Vegana, Albumina
+  { id: "2", name: "Creatina", icon: "dumbbell" }, // O produto mais vendido do Brasil
+  { id: "3", name: "Cereais e Grãos", icon: "barley" }, // Aveia, Granola, Quinoa, Psyllium
+  { id: "4", name: "Pastas e Cremes", icon: "food-apple" }, // Pasta de amendoim (campeã de vendas)
+  { id: "5", name: "Vitaminas", icon: "pill" }, // Vitamina D, Magnésio, Multivits
+  { id: "6", name: "Pré-Treinos", icon: "lightning-bolt" }, // Beta-alanina, Cafeína, Termogênicos
+  { id: "7", name: "Aminoácidos", icon: "molecule" }, // BCAA, Glutamina, EAA
+  { id: "8", name: "Colágenos", icon: "shimmer" }, // Verisol, Hidrolisado (muita busca feminina)
+  { id: "9", name: "Oleaginosas", icon: "nut" }, // Castanhas, Nozes, Amêndoas
+  { id: "10", name: "Sementes", icon: "seed-outline" }, // Chia, Linhaça, Girassol
+  { id: "11", name: "Chás e Ervas", icon: "leaf" }, // Chá Verde, Hibisco, Camomila
+  { id: "12", name: "Temperos", icon: "silverware-variant" }, // Cúrcuma, Lemon Pepper, Páprica
+  { id: "13", name: "Snacks e Barras", icon: "candy-outline" }, // Barrinhas de proteína, chips de coco
+  { id: "14", name: "Veganos", icon: "sprout" }, // Categoria de nicho que cresce 20% ao ano
 ];
 
 export default function HomeScreen() {
@@ -36,11 +48,17 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Product[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
-  const [searchMaxScore, setSearchMaxScore] = useState(0);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [searchMaxScore, setSearchMaxScore] = useState<number | null>(null);
+  const [searchOffset, setSearchOffset] = useState(0);
+  const [searchLimit] = useState(15);
+  const [hasMore, setHasMore] = useState(true);
+  const [searchEmbedding, setSearchEmbedding] = useState<number[] | null>(null);
+  const [categoryCache, setCategoryCache] = useState<Record<string, Product[]>>(
+    {},
+  );
+  const [uiLoading, setUiLoading] = useState(false);
   const router = useRouter();
-  const { id } = useLocalSearchParams();
   const { addToCart } = useCart();
 
   // 🔹 Load inicial (vitrine)
@@ -49,12 +67,14 @@ export default function HomeScreen() {
       try {
         const data = await getProducts();
         setAllProducts(data);
+        preloadCategories();
       } catch (error) {
         console.error(error);
       } finally {
         setLoading(false);
       }
     }
+
     load();
   }, []);
 
@@ -64,22 +84,32 @@ export default function HomeScreen() {
       debounce(async (query: string) => {
         if (!query.trim()) {
           setSearchResults([]);
-          setSearchLoading(false);
+          setSearchOffset(0);
+          setHasMore(true);
           return;
         }
 
         setSearchLoading(true);
-        const results = await searchProducts(query);
+        setHasMore(true);
 
-        setSearchResults(results.products);
-        setSearchMaxScore(results.maxScore);
+        await executeSearch(query, 0);
+
         setSearchLoading(false);
-      }, 350),
+      }, 800),
     [],
   );
 
   useEffect(() => {
+    setSearchEmbedding(null);
+    setSearchOffset(0);
+    setHasMore(true);
+
+    if (searchQuery.trim()) {
+      setUiLoading(true); // 🔥 AQUI
+    }
+
     debouncedSearch(searchQuery);
+
     return () => {
       debouncedSearch.cancel();
     };
@@ -91,14 +121,6 @@ export default function HomeScreen() {
       currency: "BRL",
     });
 
-  const normalizeText = (text?: string) => {
-    if (!text) return "";
-    return text
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-  };
-
   // 🔹 Função para Primeira Letra Maiúscula
   const capitalizeFirstLetter = (text?: string) => {
     if (!text) return "";
@@ -106,29 +128,35 @@ export default function HomeScreen() {
     return lower.charAt(0).toUpperCase() + lower.slice(1);
   };
 
+  const preloadCategories = async () => {
+    const priorityCategories = ["Whey", "Creatina", "Cereais e Grãos"];
+
+    for (const cat of priorityCategories) {
+      try {
+        const result = await searchProducts(cat, 6, 0, null);
+
+        setCategoryCache((prev) => ({
+          ...prev,
+          [cat]: result.products,
+        }));
+      } catch (e) {
+        console.log("Erro preload", cat);
+      }
+    }
+  };
+
   // 🔥 LÓGICA FINAL DE EXIBIÇÃO
   const displayedProducts = useMemo(() => {
-    // 1️⃣ Se estiver buscando → usar resultado do banco
     if (searchQuery.trim()) {
-      // 🔴 Busca irrelevante
-      if (searchMaxScore < 0.45) {
+      if (searchMaxScore !== null && searchMaxScore < 0.45) {
         return allProducts.slice(0, 6);
       }
 
       return searchResults;
     }
 
-    // 2️⃣ Se categoria selecionada → filtrar localmente
-    if (selectedCategory) {
-      const query = normalizeText(selectedCategory);
-      return allProducts
-        .filter((p) => normalizeText(p.name).includes(query))
-        .slice(0, 10);
-    }
-
-    // 3️⃣ Caso padrão → vitrine inicial
     return allProducts.slice(0, 6);
-  }, [searchQuery, searchResults, selectedCategory, allProducts]);
+  }, [searchQuery, searchResults, searchMaxScore, allProducts]);
 
   const randomOffers = useMemo(() => {
     if (searchQuery.trim()) return [];
@@ -139,16 +167,92 @@ export default function HomeScreen() {
     return [...available].sort(() => 0.5 - Math.random()).slice(0, 5);
   }, [allProducts, displayedProducts, searchQuery]);
 
-  const handleAddAndNavigate = async (product: Product) => {
-    await addToCart({
-      nome: product.name,
-      tipo: "UNITARIO",
-      total: product.price,
-      qtd_desc: "1 un",
-      qtd_numerica: 1,
-      image_url: product.image_url,
-    });
-    router.push("/cart");
+  const handleAddToCart = async (product: Product) => {
+    try {
+      await addToCart({
+        nome: product.name,
+        tipo: "UNITARIO",
+        total: product.price,
+        qtd_desc: "1 un",
+        qtd_numerica: 1,
+        image_url: product.image_url,
+      });
+
+      Toast.show({
+        type: "success",
+        text1: "Produto adicionado com sucesso!",
+        text2: "",
+        position: "bottom",
+        visibilityTime: 1500,
+      });
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Erro ao adicionar",
+        text2: "Tente novamente.",
+      });
+    }
+  };
+
+  const executeSearch = async (query: string, offset = 0) => {
+    try {
+      if (offset === 0) {
+        setSearchLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const result = await searchProducts(
+        query,
+        searchLimit,
+        offset,
+        offset === 0 ? null : searchEmbedding,
+      );
+
+      if (offset === 0) {
+        setSearchMaxScore(result.maxScore ?? null);
+      }
+
+      // 🔥 Atualiza embedding só na primeira busca
+      if (offset === 0 && result.embedding) {
+        setSearchEmbedding(result.embedding);
+      }
+
+      // 🔥 Atualiza lista corretamente
+      if (offset === 0) {
+        setSearchResults(result.products);
+      } else {
+        setSearchResults((prev) => {
+          const combined = [...prev, ...result.products];
+          const uniqueMap = new Map();
+
+          for (const item of combined) {
+            uniqueMap.set(item.id, item);
+          }
+
+          return Array.from(uniqueMap.values());
+        });
+      }
+
+      setSearchOffset(offset);
+
+      if (result.products.length < searchLimit) {
+        setHasMore(false);
+      }
+    } catch (error) {
+      console.error(error);
+
+      Toast.show({
+        type: "error",
+        text1: "Erro na busca",
+        text2: "Não conseguimos carregar os produtos.",
+        position: "bottom",
+      });
+    } finally {
+      setSearchLoading(false);
+      setLoadingMore(false);
+      setUiLoading(false);
+    }
   };
 
   const renderProduct = ({ item }: { item: Product }) => (
@@ -192,7 +296,7 @@ export default function HomeScreen() {
 
         <TouchableOpacity
           style={styles.addButton}
-          onPress={() => handleAddAndNavigate(item)}
+          onPress={() => handleAddToCart(item)}
         >
           <Text style={styles.addButtonText}>ADICIONAR</Text>
         </TouchableOpacity>
@@ -288,6 +392,22 @@ export default function HomeScreen() {
                   fontSize: 14,
                 }}
               />
+
+              {searchQuery.length > 0 && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setSearchQuery("");
+                    Keyboard.dismiss();
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <MaterialCommunityIcons
+                    name="close-circle"
+                    size={18}
+                    color="#999"
+                  />
+                </TouchableOpacity>
+              )}
             </View>
           </View>
 
@@ -311,88 +431,103 @@ export default function HomeScreen() {
                 style={styles.container}
               >
                 {/* CATEGORIAS - só se não estiver buscando */}
-                {!searchQuery.trim() && (
-                  <>
-                    <View style={styles.sectionHeader}>
-                      <Text style={styles.sectionTitleText}>Categorias</Text>
-                    </View>
 
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={styles.categoriesContainer}
-                    >
-                      {CATEGORIES.map((cat) => {
-                        const isActive = selectedCategory === cat.name;
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitleText}>Categorias</Text>
+                </View>
 
-                        return (
-                          <TouchableOpacity
-                            key={cat.id}
-                            style={styles.categoryItem}
-                            onPress={() =>
-                              setSelectedCategory(isActive ? null : cat.name)
-                            }
-                          >
-                            <View
-                              style={[
-                                styles.categoryCircle,
-                                isActive && {
-                                  backgroundColor: "#E31837",
-                                  borderColor: "#E31837",
-                                },
-                              ]}
-                            >
-                              <MaterialCommunityIcons
-                                name={cat.icon as any}
-                                size={24}
-                                color={isActive ? "#FFF" : "#666"}
-                              />
-                            </View>
-                            <Text style={styles.categoryText}>{cat.name}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </>
-                )}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.categoriesContainer}
+                >
+                  {CATEGORIES.map((cat) => {
+                    const isActive =
+                      searchQuery.trim().toLowerCase() ===
+                      cat.name.toLowerCase();
+
+                    return (
+                      <TouchableOpacity
+                        key={cat.id}
+                        style={styles.categoryItem}
+                        onPress={() => {
+                          setUiLoading(true);
+
+                          if (categoryCache[cat.name]) {
+                            setSearchResults(categoryCache[cat.name]);
+                            setSearchQuery(cat.name);
+                          } else {
+                            setSearchQuery(cat.name);
+                          }
+                          Keyboard.dismiss(); // Fecha o teclado se estiver aberto
+                        }}
+                      >
+                        <View
+                          style={[
+                            styles.categoryCircle,
+                            isActive && {
+                              backgroundColor: "#E31837",
+                              borderColor: "#E31837",
+                            },
+                          ]}
+                        >
+                          <MaterialCommunityIcons
+                            name={cat.icon as any}
+                            size={24}
+                            color={isActive ? "#FFF" : "#666"}
+                          />
+                        </View>
+                        <Text style={styles.categoryText}>{cat.name}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
 
                 {/* RESULTADOS */}
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitleText}>
                     {searchQuery.trim()
                       ? `Resultados para "${searchQuery}"`
-                      : selectedCategory
-                        ? `Destaques em ${selectedCategory}`
-                        : "Produtos em Destaque"}
+                      : "Produtos em Destaque"}
                   </Text>
                 </View>
 
-                {searchQuery.trim() && searchMaxScore < 0.45 && (
-                  <View style={{ padding: 16 }}>
-                    <Text
-                      style={{
-                        fontSize: 16,
-                        fontWeight: "bold",
-                        textAlign: "center",
-                      }}
-                    >
-                      Não encontramos "{searchQuery}"
-                    </Text>
-                    <Text
-                      style={{
-                        fontSize: 13,
-                        textAlign: "center",
-                        marginTop: 6,
-                        color: "#666",
-                      }}
-                    >
-                      Veja algumas sugestões abaixo:
-                    </Text>
-                  </View>
-                )}
+                {searchQuery.trim() &&
+                  !searchLoading &&
+                  searchMaxScore !== null &&
+                  searchMaxScore < 0.45 && (
+                    <View style={{ padding: 16 }}>
+                      <Text
+                        style={{
+                          fontSize: 16,
+                          fontWeight: "bold",
+                          textAlign: "center",
+                        }}
+                      >
+                        Não encontramos "{searchQuery}"
+                      </Text>
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          textAlign: "center",
+                          marginTop: 6,
+                          color: "#666",
+                        }}
+                      >
+                        Veja algumas sugestões abaixo:
+                      </Text>
+                    </View>
+                  )}
 
-                {searchLoading ? (
-                  <ActivityIndicator size="small" color="#E31837" />
+                {uiLoading ? (
+                  <FlatList
+                    data={Array.from({ length: 6 })}
+                    keyExtractor={(_, index) => `skeleton-${index}`}
+                    numColumns={2}
+                    scrollEnabled={false}
+                    columnWrapperStyle={styles.productGridRow}
+                    renderItem={() => <SkeletonCard />}
+                  />
                 ) : (
                   <FlatList
                     data={displayedProducts}
@@ -402,13 +537,29 @@ export default function HomeScreen() {
                     scrollEnabled={false}
                     columnWrapperStyle={styles.productGridRow}
                     contentContainerStyle={styles.productGridContainer}
-                    ListEmptyComponent={
-                      <Text style={{ textAlign: "center", margin: 20 }}>
-                        Nenhum produto encontrado.
-                      </Text>
-                    }
                   />
                 )}
+
+                {searchQuery.trim() &&
+                  !searchLoading &&
+                  searchResults.length > 0 &&
+                  hasMore && (
+                    <TouchableOpacity
+                      style={{ marginVertical: 20, alignItems: "center" }}
+                      disabled={loadingMore}
+                      onPress={() =>
+                        executeSearch(searchQuery, searchOffset + searchLimit)
+                      }
+                    >
+                      {loadingMore ? (
+                        <ActivityIndicator size="small" color="#E31837" />
+                      ) : (
+                        <Text style={{ color: "#E31837", fontWeight: "bold" }}>
+                          Mostrar mais
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  )}
 
                 {/* OFERTAS - só fora do modo busca */}
                 {!searchQuery.trim() && randomOffers.length > 0 && (
@@ -470,7 +621,7 @@ export default function HomeScreen() {
                               borderRadius: 6,
                               alignItems: "center",
                             }}
-                            onPress={() => handleAddAndNavigate(offer)}
+                            onPress={() => handleAddToCart(offer)}
                           >
                             <Text
                               style={{

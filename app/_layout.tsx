@@ -10,7 +10,9 @@ import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
 import "react-native-reanimated";
 // 1. REMOVA A IMPORTAÇÃO DO SAFEAREAVIEW DAQUI
+import { ErrorToast, SuccessToast } from "@/components/CustomToast";
 import { View } from "react-native";
+import Toast from "react-native-toast-message";
 
 import { useColorScheme } from "@/components/useColorScheme";
 import { CartProvider } from "@/context/CartContext";
@@ -22,6 +24,11 @@ export const unstable_settings = {
 };
 
 SplashScreen.preventAutoHideAsync();
+
+const toastConfig = {
+  success: (props: any) => <SuccessToast {...props} />,
+  error: (props: any) => <ErrorToast {...props} />,
+};
 
 export default function RootLayout() {
   const [loaded, error] = useFonts({
@@ -63,6 +70,7 @@ function RootLayoutNav() {
               options={{ headerShown: false }}
             />
           </Stack>
+          <Toast config={toastConfig} />
         </View>
       </CartProvider>
     </ThemeProvider>

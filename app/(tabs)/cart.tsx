@@ -26,12 +26,11 @@ export default function CartScreen() {
     );
   }, [cartItems]);
 
-  const formatPrice = (price: number) => {
-    return price.toLocaleString("pt-BR", {
+  const formatPrice = (price?: number) =>
+    (price ?? 0).toLocaleString("pt-BR", {
       style: "currency",
       currency: "BRL",
     });
-  };
 
   const renderCartItem = ({ item }: { item: CartItem }) => (
     <View style={styles.cartItem}>

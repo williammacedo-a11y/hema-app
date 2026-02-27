@@ -194,7 +194,7 @@ export default function ProductDetailsScreen() {
         </View>
 
         {similarProducts.length > 0 && (
-          <View style={{ marginTop: 20 }}>
+          <View style={{ margin: 20}}>
             <Text
               style={{ fontSize: 16, fontWeight: "bold", marginBottom: 10 }}
             >

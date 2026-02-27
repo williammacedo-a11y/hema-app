@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, useContext } from "react";
 import { getCartFromDB, saveCartToDB, CartItem } from "@/services/cart";
+import Toast from "react-native-toast-message";
 
 interface CartContextData {
   cartItems: CartItem[];
@@ -16,14 +17,32 @@ export const CartContext = createContext<CartContextData>(
   {} as CartContextData,
 );
 
+function normalizeMoney(value: any): number {
+  if (typeof value === "number") return value;
+
+  if (!value) return 0;
+
+  return Number(
+    String(value).replace("R$", "").replace(/\./g, "").replace(",", ".").trim(),
+  );
+}
+
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
 
   useEffect(() => {
     async function load() {
       const data = await getCartFromDB();
-      setCartItems(data);
+
+      const normalized = (data || []).map((item) => ({
+        ...item,
+        total: normalizeMoney(item.total),
+        qtd_numerica: Number(item.qtd_numerica),
+      }));
+
+      setCartItems(normalized);
     }
+
     load();
   }, []);
 
@@ -67,8 +86,26 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   // DELETE (Remover item)
   const removeItem = async (nome: string) => {
-    const newItems = cartItems.filter((item) => item.nome !== nome);
-    await syncCart(newItems);
+    try {
+      const newItems = cartItems.filter((item) => item.nome !== nome);
+
+      await syncCart(newItems);
+
+      Toast.show({
+        type: "success",
+        text1: "Produto removido com sucesso!",
+        text2: nome,
+        position: "bottom",
+        visibilityTime: 1200,
+      });
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Erro ao remover",
+        text2: "Tente novamente.",
+        position: "bottom",
+      });
+    }
   };
 
   const cartCount = (cartItems || []).reduce(
