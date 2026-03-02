@@ -22,25 +22,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { styles } from "../../styles/home.styles";
 import SkeletonCard from "@/components/SkeletonCard";
-import { CATEGORY_EMBEDDINGS } from "@/constants/CategoryEmbeddings";
-
-const CATEGORIES = [
-  // --- SUPLEMENTAÇÃO ---
-  { id: "1", name: "Whey", icon: "shaker-outline" }, // Whey, Vegana, Albumina
-  { id: "2", name: "Creatina", icon: "dumbbell" }, // O produto mais vendido do Brasil
-  { id: "3", name: "Cereais e Grãos", icon: "barley" }, // Aveia, Granola, Quinoa, Psyllium
-  { id: "4", name: "Pastas e Cremes", icon: "food-apple" }, // Pasta de amendoim (campeã de vendas)
-  { id: "5", name: "Vitaminas", icon: "pill" }, // Vitamina D, Magnésio, Multivits
-  { id: "6", name: "Pré-Treinos", icon: "lightning-bolt" }, // Beta-alanina, Cafeína, Termogênicos
-  { id: "7", name: "Aminoácidos", icon: "molecule" }, // BCAA, Glutamina, EAA
-  { id: "8", name: "Colágenos", icon: "shimmer" }, // Verisol, Hidrolisado (muita busca feminina)
-  { id: "9", name: "Oleaginosas", icon: "nut" }, // Castanhas, Nozes, Amêndoas
-  { id: "10", name: "Sementes", icon: "seed-outline" }, // Chia, Linhaça, Girassol
-  { id: "11", name: "Chás e Ervas", icon: "leaf" }, // Chá Verde, Hibisco, Camomila
-  { id: "12", name: "Temperos", icon: "silverware-variant" }, // Cúrcuma, Lemon Pepper, Páprica
-  { id: "13", name: "Snacks e Barras", icon: "candy-outline" }, // Barrinhas de proteína, chips de coco
-  { id: "14", name: "Veganos", icon: "sprout" }, // Categoria de nicho que cresce 20% ao ano
-];
+import {
+  CATEGORIES,
+  fetchCategoryProducts,
+  preloadPriorityCategories,
+} from "@/services/categories";
 
 export default function HomeScreen() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -55,6 +41,7 @@ export default function HomeScreen() {
   const [hasMore, setHasMore] = useState(true);
   const [searchEmbedding, setSearchEmbedding] = useState<number[] | null>(null);
   const [uiLoading, setUiLoading] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const router = useRouter();
   const { addToCart } = useCart();
   const [categoryCache, setCategoryCache] = useState<Record<string, Product[]>>(
@@ -66,7 +53,6 @@ export default function HomeScreen() {
       try {
         const data = await getHomeProducts(10, 0);
         setAllProducts(data);
-        preloadCategories();
       } catch (error) {
         console.error(error);
       } finally {
@@ -128,44 +114,34 @@ export default function HomeScreen() {
     return lower.charAt(0).toUpperCase() + lower.slice(1);
   };
 
-  const preloadCategories = async () => {
-    const priorityCategories = ["Whey", "Creatina", "Cereais e Grãos"];
+  useEffect(() => {
+    const load = async () => {
+      const priority = ["Whey", "Creatina", "Cereais e Grãos"];
 
-    try {
-      const results = await Promise.all(
-        priorityCategories.map((cat) =>
-          searchProducts(cat, 6, 0, CATEGORY_EMBEDDINGS[cat]),
-        ),
-      );
+      const cache = await preloadPriorityCategories(priority);
 
-      const newCache: Record<string, any> = {};
+      setCategoryCache(cache);
+    };
 
-      priorityCategories.forEach((cat, index) => {
-        newCache[cat] = results[index].products;
-      });
-
-      setCategoryCache((prev) => ({
-        ...prev,
-        ...newCache,
-      }));
-    } catch (e) {
-      console.log("Erro preload", e);
-    }
-  };
+    load();
+  }, []);
 
   // 🔥 LÓGICA FINAL DE EXIBIÇÃO
   const displayedProducts = useMemo(() => {
+    if (activeCategory) {
+      return searchResults;
+    }
+
     if (searchQuery.trim()) {
       if (searchMaxScore !== null && searchMaxScore < 0.45) {
         return allProducts.slice(0, 6);
       }
-
       return searchResults;
     }
 
-    return allProducts.slice(0, 6);
-  }, [searchQuery, searchResults, searchMaxScore, allProducts]);
-
+    return allProducts;
+  }, [activeCategory, searchQuery, searchResults, searchMaxScore, allProducts]);
+  
   const randomOffers = useMemo(() => {
     if (searchQuery.trim()) return [];
 
@@ -437,8 +413,7 @@ export default function HomeScreen() {
                 showsVerticalScrollIndicator={false}
                 style={styles.container}
               >
-                {/* CATEGORIAS - só se não estiver buscando */}
-
+                {/* CATEGORIAS */}
                 <View style={styles.sectionHeader}>
                   <Text style={styles.sectionTitleText}>Categorias</Text>
                 </View>
@@ -449,9 +424,7 @@ export default function HomeScreen() {
                   contentContainerStyle={styles.categoriesContainer}
                 >
                   {CATEGORIES.map((cat) => {
-                    const isActive =
-                      searchQuery.trim().toLowerCase() ===
-                      cat.name.toLowerCase();
+                    const isActive = activeCategory === cat.name;
 
                     return (
                       <TouchableOpacity
@@ -460,41 +433,29 @@ export default function HomeScreen() {
                         onPress={async () => {
                           Keyboard.dismiss();
                           setUiLoading(true);
+                          setActiveCategory(cat.name);
 
-                          const embedding =
-                            CATEGORY_EMBEDDINGS[cat.name] ?? null;
-
-                          // reseta estado
-                          setSearchOffset(0);
-                          setHasMore(true);
-                          setSearchEmbedding(embedding);
-
-                          // se já estiver em cache → instantâneo
                           if (categoryCache[cat.name]) {
                             setSearchResults(categoryCache[cat.name]);
-                            setSearchQuery(cat.name);
                             setUiLoading(false);
                             return;
                           }
 
                           try {
-                            const result = await searchProducts(
+                            const products = await fetchCategoryProducts(
                               cat.name,
-                              6,
-                              0,
-                              embedding,
                             );
 
-                            setSearchResults(result.products);
-                            setSearchQuery(cat.name);
+                            setSearchResults(products);
 
-                            // salva no cache
-                            setCategoryCache((prev) => ({
-                              ...prev,
-                              [cat.name]: result.products,
-                            }));
-                          } catch (error) {
-                            console.error(error);
+                            setCategoryCache((prev) => {
+                              const updated = {
+                                ...prev,
+                                [cat.name]: products,
+                              };
+
+                              return updated;
+                            });
                           } finally {
                             setUiLoading(false);
                           }
