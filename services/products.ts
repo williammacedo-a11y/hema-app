@@ -1,72 +1,37 @@
 import { Product } from "../types/product";
 import { supabase } from "./supabase";
 
-function formatTitleCase(text: string) {
-  if (!text) return "";
+export async function getHomeProducts(
+  limit = 6,
+  offset = 0,
+): Promise<Product[]> {
+  const { data, error } = await supabase.rpc("get_home_products", {
+    p_limit: limit,
+    p_offset: offset,
+  });
 
-  const exceptions = [
-    "de",
-    "da",
-    "do",
-    "das",
-    "dos",
-    "com",
-    "sem",
-    "e",
-    "em",
-    "para",
-  ];
+  if (error) throw error;
 
-  return text
-    .toLowerCase()
-    .split(" ")
-    .map((word, index) => {
-      if (!word) return "";
-
-      if (index > 0 && exceptions.includes(word)) {
-        return word;
-      }
-
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-}
-
-export async function getProducts(): Promise<Product[]> {
-  const { data, error } = await supabase.from("produtos_hema_cereais").select(`
-      id,
-      name:nome,
-      price:preço,
-      quantity:quantidade,
-      description:descricao,
-      image_url:url_imagem,
-      createdAt:created_at
-    `);
-
-  if (error) {
-    console.error("Erro ao buscar produtos:", error);
-    return [];
-  }
-
-  if (!data) return [];
-
-  return data.map((item: any) => {
-    const rawPrice = item.price
-      ? String(item.price)
-          .replace(/[^\d,-]/g, "")
+  const mapped: Product[] = (data ?? []).map((item: any) => {
+    const rawPrice = item.preço
+      ? String(item.preço)
+          .replace(/[^\d,]/g, "")
           .replace(",", ".")
       : "0";
 
     return {
-      ...item,
-      name: formatTitleCase(item.name),
-
+      id: item.id,
+      name: item.nome,
       price: parseFloat(rawPrice) || 0,
-      quantity: parseInt(item.quantity, 10) || 0,
-      image_url: item.image_url || "",
-      description: formatTitleCase(item.description),
+      quantity: Number(item.quantidade) || 0,
+      description: item.descricao ?? "",
+      image_url: item.url_imagem ?? "",
+      createdAt: item.created_at,
+      score: 0,
     };
   });
+
+  return mapped;
 }
 
 type SearchResult = {
@@ -104,13 +69,6 @@ export async function searchProducts(
   }
 
   const data = await response.json();
-
-  // Resultados de pesquisa ordenados por score de similaridade com a query
-  // console.log("\n\nQuery:", query);
-  // console.log("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-  // data?.forEach((item: any, index: number) => {
-  //   console.log(`#${index} | ${item.nome ?? item.name} | score: ${item.score}`);
-  // });
 
   const mapped: Product[] = (data.products ?? []).map((item: any) => {
     const rawPrice = item.preço

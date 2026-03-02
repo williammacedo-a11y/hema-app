@@ -15,14 +15,14 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
-
 import { useCart } from "@/context/CartContext";
-import { getProducts, searchProducts } from "@/services/products";
+import { getHomeProducts, searchProducts } from "@/services/products";
 import { Product } from "@/types/product";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { styles } from "../../styles/home.styles";
-import SkeletonCard, { SkeletonGrid } from "@/components/SkeletonCard";
+import SkeletonCard from "@/components/SkeletonCard";
+import { CATEGORY_EMBEDDINGS } from "@/constants/CategoryEmbeddings";
 
 const CATEGORIES = [
   // --- SUPLEMENTAÇÃO ---
@@ -61,11 +61,10 @@ export default function HomeScreen() {
   const router = useRouter();
   const { addToCart } = useCart();
 
-  // 🔹 Load inicial (vitrine)
   useEffect(() => {
     async function load() {
       try {
-        const data = await getProducts();
+        const data = await getHomeProducts(10, 0);
         setAllProducts(data);
         preloadCategories();
       } catch (error) {
@@ -82,6 +81,7 @@ export default function HomeScreen() {
   const debouncedSearch = useMemo(
     () =>
       debounce(async (query: string) => {
+        if (searchEmbedding) return;
         if (!query.trim()) {
           setSearchResults([]);
           setSearchOffset(0);
@@ -131,17 +131,25 @@ export default function HomeScreen() {
   const preloadCategories = async () => {
     const priorityCategories = ["Whey", "Creatina", "Cereais e Grãos"];
 
-    for (const cat of priorityCategories) {
-      try {
-        const result = await searchProducts(cat, 6, 0, null);
+    try {
+      const results = await Promise.all(
+        priorityCategories.map((cat) =>
+          searchProducts(cat, 6, 0, CATEGORY_EMBEDDINGS[cat]),
+        ),
+      );
 
-        setCategoryCache((prev) => ({
-          ...prev,
-          [cat]: result.products,
-        }));
-      } catch (e) {
-        console.log("Erro preload", cat);
-      }
+      const newCache: Record<string, any> = {};
+
+      priorityCategories.forEach((cat, index) => {
+        newCache[cat] = results[index].products;
+      });
+
+      setCategoryCache((prev) => ({
+        ...prev,
+        ...newCache,
+      }));
+    } catch (e) {
+      console.log("Erro preload", e);
     }
   };
 
@@ -169,6 +177,13 @@ export default function HomeScreen() {
 
   const handleAddToCart = async (product: Product) => {
     try {
+      Toast.show({
+        type: "success",
+        text1: "Produto adicionado com sucesso!",
+        text2: "",
+        position: "bottom",
+        visibilityTime: 1500,
+      });
       await addToCart({
         nome: product.name,
         tipo: "UNITARIO",
@@ -176,14 +191,6 @@ export default function HomeScreen() {
         qtd_desc: "1 un",
         qtd_numerica: 1,
         image_url: product.image_url,
-      });
-
-      Toast.show({
-        type: "success",
-        text1: "Produto adicionado com sucesso!",
-        text2: "",
-        position: "bottom",
-        visibilityTime: 1500,
       });
     } catch (error) {
       Toast.show({
@@ -450,16 +457,47 @@ export default function HomeScreen() {
                       <TouchableOpacity
                         key={cat.id}
                         style={styles.categoryItem}
-                        onPress={() => {
+                        onPress={async () => {
+                          Keyboard.dismiss();
                           setUiLoading(true);
 
+                          const embedding =
+                            CATEGORY_EMBEDDINGS[cat.name] ?? null;
+
+                          // reseta estado
+                          setSearchOffset(0);
+                          setHasMore(true);
+                          setSearchEmbedding(embedding);
+
+                          // se já estiver em cache → instantâneo
                           if (categoryCache[cat.name]) {
                             setSearchResults(categoryCache[cat.name]);
                             setSearchQuery(cat.name);
-                          } else {
-                            setSearchQuery(cat.name);
+                            setUiLoading(false);
+                            return;
                           }
-                          Keyboard.dismiss(); // Fecha o teclado se estiver aberto
+
+                          try {
+                            const result = await searchProducts(
+                              cat.name,
+                              6,
+                              0,
+                              embedding,
+                            );
+
+                            setSearchResults(result.products);
+                            setSearchQuery(cat.name);
+
+                            // salva no cache
+                            setCategoryCache((prev) => ({
+                              ...prev,
+                              [cat.name]: result.products,
+                            }));
+                          } catch (error) {
+                            console.error(error);
+                          } finally {
+                            setUiLoading(false);
+                          }
                         }}
                       >
                         <View
