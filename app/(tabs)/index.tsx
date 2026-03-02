@@ -54,12 +54,12 @@ export default function HomeScreen() {
   const [searchLimit] = useState(15);
   const [hasMore, setHasMore] = useState(true);
   const [searchEmbedding, setSearchEmbedding] = useState<number[] | null>(null);
-  const [categoryCache, setCategoryCache] = useState<Record<string, Product[]>>(
-    {},
-  );
   const [uiLoading, setUiLoading] = useState(false);
   const router = useRouter();
   const { addToCart } = useCart();
+  const [categoryCache, setCategoryCache] = useState<Record<string, Product[]>>(
+    {},
+  );
 
   useEffect(() => {
     async function load() {
