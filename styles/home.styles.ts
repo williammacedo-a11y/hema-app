@@ -15,8 +15,14 @@ export const styles = StyleSheet.create({
     backgroundColor: "#E31837", // Vermelho da marca
     margin: 16,
     padding: 24,
-    borderRadius: 4,
+    borderRadius: 16, // De 4 para 16 (muito mais amigável)
     justifyContent: "center",
+    // Adicionado um sombreado sutil para destacar o banner
+    elevation: 4,
+    shadowColor: "#E31837",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
   },
   promoTitle: {
     color: "#FFF",
@@ -34,7 +40,7 @@ export const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     paddingVertical: 10,
     paddingHorizontal: 20,
-    borderRadius: 2, // Estilo mais quadrado (Amazon-like)
+    borderRadius: 24, // De 2 para 24 (formato de pílula)
     alignSelf: "flex-start",
   },
   promoButtonText: {
@@ -51,12 +57,12 @@ export const styles = StyleSheet.create({
   },
   searchInput: {
     backgroundColor: "#F5F5F5",
-    borderRadius: 12,
-    paddingHorizontal: 16,
+    borderRadius: 24, // De 12 para 24 (formato de pílula arredondada)
+    paddingHorizontal: 20,
     paddingVertical: 12,
     fontSize: 14,
     borderWidth: 1,
-    borderColor: "#E5E5E5",
+    borderColor: "#EAEAEA", // Borda um pouco mais suave
   },
   // --- CABEÇALHOS DE SEÇÃO ---
   sectionHeader: {
@@ -80,13 +86,20 @@ export const styles = StyleSheet.create({
     marginRight: 20,
   },
   categoryCircle: {
-    width: 65,
-    height: 65,
-    borderRadius: 4, // Pouco arredondado como pedido
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: "#F8F8F8",
     borderWidth: 1,
-    borderColor: "#EEE",
+    borderColor: "#EFEFEF",
     marginBottom: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
   },
   categoryText: {
     fontSize: 12,
@@ -104,21 +117,23 @@ export const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     width: width / 2 - 24,
     margin: 8,
-    borderRadius: 2,
+    borderRadius: 16, // De 2 para 16
     borderWidth: 1,
     borderColor: "#F0F0F0",
-    elevation: 2,
+    elevation: 3, // Sombra um pouco mais presente no Android
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06, // Sombra mais suave e espalhada no iOS
+    shadowRadius: 8,
   },
   productImagePlaceholder: {
     height: 130,
     backgroundColor: "#FBFBFB",
+    borderTopLeftRadius: 16, // Acompanha a curvatura do card para não vazar
+    borderTopRightRadius: 16, // Acompanha a curvatura do card
   },
   productInfo: {
-    padding: 10,
+    padding: 12, // Um pouco mais de respiro interno
   },
   productName: {
     fontSize: 14,
@@ -135,13 +150,13 @@ export const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: "#E31837",
-    paddingVertical: 8,
-    borderRadius: 2,
+    paddingVertical: 10, // Aumentei um pouco para facilitar o clique
+    borderRadius: 100, // De 2 para 12 (botão bem amigável, sem ser pílula inteira)
     alignItems: "center",
   },
   addButtonText: {
     color: "#FFF",
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: "700",
   },
   // --- OFERTAS ---
@@ -157,13 +172,13 @@ export const styles = StyleSheet.create({
     width: 150,
     height: 110,
     backgroundColor: "#F5F5F5",
-    borderRadius: 2,
-    marginBottom: 8,
+    borderRadius: 12, // De 2 para 12
+    marginBottom: 10, // Mais respiro antes do texto
   },
   offerName: {
     fontSize: 13,
     color: "#444",
-    marginBottom: 2,
+    marginBottom: 4,
   },
   oldPriceText: {
     fontSize: 12,

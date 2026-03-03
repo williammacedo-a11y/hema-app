@@ -1,6 +1,12 @@
 import { Product } from "../types/product";
 import { supabase } from "./supabase";
 
+type SearchResult = {
+  products: Product[];
+  maxScore: number;
+  embedding: number[];
+};
+
 export async function getHomeProducts(
   limit = 6,
   offset = 0,
@@ -34,15 +40,9 @@ export async function getHomeProducts(
   return mapped;
 }
 
-type SearchResult = {
-  products: Product[];
-  maxScore: number;
-  embedding: number[];
-};
-
 export async function searchProducts(
   query: string,
-  limit = 15,
+  limit = 16,
   offset = 0,
   embedding?: number[] | null,
 ): Promise<SearchResult> {

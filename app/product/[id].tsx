@@ -37,11 +37,16 @@ export default function ProductDetailsScreen() {
       if (!error && data) {
         setProduct({
           id: data.id,
-          name: data.nome,
-          price: data.preço,
-          quantity: Number(data.quantidade),
+          name: data.nome ?? "",
+          price: parseFloat(
+            String(data.preço ?? data.preco ?? 0).replace(",", "."),
+          ),
+          quantity: Number(data.quantidade ?? 0),
           description: data.descricao ?? "",
-          image_url: data.url_imagem ?? "",
+          image_url:
+            data.url_imagem && data.url_imagem.length > 0
+              ? data.url_imagem
+              : null,
           createdAt: data.created_at,
         });
       }
@@ -140,6 +145,8 @@ export default function ProductDetailsScreen() {
       qtd_numerica: 1,
       image_url: product.image_url,
     });
+
+    console.log(typeof product.price, product.price);
     // Vai direto para o carrinho após adicionar
     router.push("/cart");
   };
@@ -160,10 +167,7 @@ export default function ProductDetailsScreen() {
         {/* IMAGEM DO PRODUTO */}
         <View style={styles.imageContainer}>
           {product.image_url ? (
-            <Image
-              source={{ uri: product.image_url }}
-              style={styles.productImage}
-            />
+            <Image source={{ uri: product.image_url }} />
           ) : (
             <>
               <Ionicons name="image-outline" size={60} color="#DDD" />
@@ -194,7 +198,7 @@ export default function ProductDetailsScreen() {
         </View>
 
         {similarProducts.length > 0 && (
-          <View style={{ margin: 20}}>
+          <View style={{ margin: 20 }}>
             <Text
               style={{ fontSize: 16, fontWeight: "bold", marginBottom: 10 }}
             >

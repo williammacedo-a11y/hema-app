@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import debounce from "lodash.debounce";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useRef } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,10 +10,12 @@ import {
   ScrollView,
   StatusBar,
   Text,
-  TextInput,
+  RefreshControl,
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  Animated,
+  Easing,
 } from "react-native";
 import { useCart } from "@/context/CartContext";
 import { getHomeProducts, searchProducts } from "@/services/products";
@@ -27,6 +29,7 @@ import {
   fetchCategoryProducts,
   preloadPriorityCategories,
 } from "@/services/categories";
+import SearchBar from "@/components/SearchBar";
 
 export default function HomeScreen() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -43,7 +46,14 @@ export default function HomeScreen() {
   const [uiLoading, setUiLoading] = useState(false);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const router = useRouter();
+  const [searchOpen, setSearchOpen] = useState(false);
   const { addToCart } = useCart();
+  const [refreshing, setRefreshing] = useState(false);
+  const headerAnim = useRef(new Animated.Value(0)).current;
+  const [categoryOffset, setCategoryOffset] = useState(0);
+  const [categoryLimit] = useState(15);
+  const [categoryHasMore, setCategoryHasMore] = useState(true);
+  const [categoryLoadingMore, setCategoryLoadingMore] = useState(false);
   const [categoryCache, setCategoryCache] = useState<Record<string, Product[]>>(
     {},
   );
@@ -86,12 +96,21 @@ export default function HomeScreen() {
   );
 
   useEffect(() => {
+    const trimmed = searchQuery.trim();
+
     setSearchEmbedding(null);
     setSearchOffset(0);
     setHasMore(true);
 
-    if (searchQuery.trim()) {
-      setUiLoading(true); // 🔥 AQUI
+    // 🔥 Se começou a digitar → desativa categoria
+    if (trimmed.length > 0 && activeCategory) {
+      setActiveCategory(null);
+      setCategoryOffset(0);
+      setCategoryHasMore(true);
+    }
+
+    if (trimmed.length > 0) {
+      setUiLoading(true);
     }
 
     debouncedSearch(searchQuery);
@@ -126,6 +145,7 @@ export default function HomeScreen() {
     load();
   }, []);
 
+  const isFiltering = searchQuery.trim().length > 0 || !!activeCategory;
   // 🔥 LÓGICA FINAL DE EXIBIÇÃO
   const displayedProducts = useMemo(() => {
     if (activeCategory) {
@@ -141,9 +161,9 @@ export default function HomeScreen() {
 
     return allProducts;
   }, [activeCategory, searchQuery, searchResults, searchMaxScore, allProducts]);
-  
+
   const randomOffers = useMemo(() => {
-    if (searchQuery.trim()) return [];
+    if (!isFiltering) return [];
 
     const displayedIds = displayedProducts.map((p) => p.id);
     const available = allProducts.filter((p) => !displayedIds.includes(p.id));
@@ -238,6 +258,38 @@ export default function HomeScreen() {
     }
   };
 
+  const loadMoreCategory = async () => {
+    if (!activeCategory || !categoryHasMore) return;
+
+    try {
+      setCategoryLoadingMore(true);
+
+      const nextOffset = categoryOffset + categoryLimit;
+
+      const products = await fetchCategoryProducts(
+        activeCategory,
+        categoryLimit,
+        nextOffset,
+      );
+
+      setSearchResults((prev) => {
+        const combined = [...prev, ...products];
+        const unique = new Map();
+
+        combined.forEach((item) => {
+          unique.set(item.id, item);
+        });
+
+        return Array.from(unique.values());
+      });
+
+      setCategoryOffset(nextOffset);
+      setCategoryHasMore(products.length === categoryLimit);
+    } finally {
+      setCategoryLoadingMore(false);
+    }
+  };
+
   const renderProduct = ({ item }: { item: Product }) => (
     <TouchableOpacity
       style={styles.productCard}
@@ -287,6 +339,54 @@ export default function HomeScreen() {
     </TouchableOpacity>
   );
 
+  const handleRefresh = async () => {
+    try {
+      setRefreshing(true);
+
+      // 🔹 Modo categoria
+      if (activeCategory) {
+        const products = await fetchCategoryProducts(activeCategory);
+
+        setSearchResults(products);
+
+        setCategoryCache((prev) => ({
+          ...prev,
+          [activeCategory]: products,
+        }));
+
+        setHasMore(false); // categoria não tem paginação (ainda)
+        return;
+      }
+
+      // 🔹 Modo busca
+      if (searchQuery.trim()) {
+        setSearchOffset(0);
+        setHasMore(true);
+        setSearchEmbedding(null);
+
+        await executeSearch(searchQuery, 0);
+        return;
+      }
+
+      // 🔹 Modo default (home)
+      const data = await getHomeProducts(10, 0);
+      setAllProducts(data);
+    } catch (error) {
+      console.error("Erro no refresh:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    Animated.timing(headerAnim, {
+      toValue: searchOpen ? 1 : 0,
+      duration: 250,
+      easing: Easing.out(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [searchOpen]);
+
   return (
     <SafeAreaView
       style={{ flex: 1, backgroundColor: "#E31837" }}
@@ -298,99 +398,52 @@ export default function HomeScreen() {
           <StatusBar barStyle="light-content" backgroundColor="#E31837" />
 
           <View
-            style={{ paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 }}
+            style={{
+              paddingHorizontal: 20,
+              paddingTop: 16,
+              paddingBottom: 20,
+            }}
           >
-            {/* LINHA SUPERIOR */}
             <View
               style={{
                 flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: 18,
               }}
             >
-              <View>
+              {/* TÍTULO */}
+              <View style={{ flex: 1 }}>
                 <Text
                   style={{
                     color: "#FFF",
-                    fontSize: 14,
-                    opacity: 0.85,
+                    fontSize: 13,
+                    opacity: 0.75,
+                    marginBottom: 4,
                   }}
                 >
                   Bem-vindo
                 </Text>
+
                 <Text
                   style={{
                     color: "#FFF",
-                    fontSize: 22,
-                    fontWeight: "bold",
+                    fontSize: 24,
+                    fontWeight: "700",
                   }}
+                  numberOfLines={1}
                 >
                   Hema Cereais
                 </Text>
               </View>
 
-              {/* Avatar */}
-              <View
-                style={{
-                  width: 42,
-                  height: 42,
-                  borderRadius: 21,
-                  backgroundColor: "#FFF",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ color: "#E31837", fontWeight: "bold" }}>HC</Text>
-              </View>
-            </View>
-
-            {/* SEARCH */}
-            <View
-              style={{
-                backgroundColor: "#FFF",
-                borderRadius: 16,
-                paddingHorizontal: 16,
-                paddingVertical: 12,
-                flexDirection: "row",
-                alignItems: "center",
-              }}
-            >
-              <MaterialCommunityIcons
-                name="magnify"
-                size={20}
-                color="#999"
-                style={{ marginRight: 8 }}
-              />
-
-              <TextInput
-                placeholder="Buscar produtos..."
-                placeholderTextColor="#999"
+              {/* SEARCH */}
+              <SearchBar
                 value={searchQuery}
                 onChangeText={setSearchQuery}
-                returnKeyType="search"
-                onSubmitEditing={() => Keyboard.dismiss()}
-                style={{
-                  flex: 1,
-                  fontSize: 14,
-                }}
+                expanded={searchOpen}
+                onExpand={() => setSearchOpen(true)}
+                onCollapse={() => setSearchOpen(false)}
+                onSubmit={() => Keyboard.dismiss()}
               />
-
-              {searchQuery.length > 0 && (
-                <TouchableOpacity
-                  onPress={() => {
-                    setSearchQuery("");
-                    Keyboard.dismiss();
-                  }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <MaterialCommunityIcons
-                    name="close-circle"
-                    size={18}
-                    color="#999"
-                  />
-                </TouchableOpacity>
-              )}
             </View>
           </View>
 
@@ -412,6 +465,14 @@ export default function HomeScreen() {
               <ScrollView
                 showsVerticalScrollIndicator={false}
                 style={styles.container}
+                refreshControl={
+                  <RefreshControl
+                    refreshing={refreshing}
+                    onRefresh={handleRefresh}
+                    colors={["#E31837"]}
+                    tintColor="#E31837"
+                  />
+                }
               >
                 {/* CATEGORIAS */}
                 <View style={styles.sectionHeader}>
@@ -432,30 +493,31 @@ export default function HomeScreen() {
                         style={styles.categoryItem}
                         onPress={async () => {
                           Keyboard.dismiss();
-                          setUiLoading(true);
-                          setActiveCategory(cat.name);
 
-                          if (categoryCache[cat.name]) {
-                            setSearchResults(categoryCache[cat.name]);
-                            setUiLoading(false);
+                          if (activeCategory === cat.name) {
+                            setActiveCategory(null);
+                            setSearchResults([]);
+                            setCategoryOffset(0);
+                            setCategoryHasMore(true);
                             return;
                           }
+
+                          setUiLoading(true);
+                          setActiveCategory(cat.name);
+                          setSearchQuery("");
+                          setCategoryOffset(0);
 
                           try {
                             const products = await fetchCategoryProducts(
                               cat.name,
+                              categoryLimit,
+                              0,
                             );
 
                             setSearchResults(products);
-
-                            setCategoryCache((prev) => {
-                              const updated = {
-                                ...prev,
-                                [cat.name]: products,
-                              };
-
-                              return updated;
-                            });
+                            setCategoryHasMore(
+                              products.length === categoryLimit,
+                            );
                           } finally {
                             setUiLoading(false);
                           }
@@ -472,7 +534,7 @@ export default function HomeScreen() {
                         >
                           <MaterialCommunityIcons
                             name={cat.icon as any}
-                            size={24}
+                            size={40}
                             color={isActive ? "#FFF" : "#666"}
                           />
                         </View>
@@ -539,29 +601,44 @@ export default function HomeScreen() {
                   />
                 )}
 
-                {searchQuery.trim() &&
-                  !searchLoading &&
-                  searchResults.length > 0 &&
-                  hasMore && (
-                    <TouchableOpacity
-                      style={{ marginVertical: 20, alignItems: "center" }}
-                      disabled={loadingMore}
-                      onPress={() =>
-                        executeSearch(searchQuery, searchOffset + searchLimit)
-                      }
-                    >
-                      {loadingMore ? (
-                        <ActivityIndicator size="small" color="#E31837" />
-                      ) : (
-                        <Text style={{ color: "#E31837", fontWeight: "bold" }}>
-                          Mostrar mais
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  )}
+                {/* MOSTRAR MAIS - CATEGORIA */}
+                {activeCategory && categoryHasMore && (
+                  <TouchableOpacity
+                    style={{ marginVertical: 20, alignItems: "center" }}
+                    disabled={categoryLoadingMore}
+                    onPress={loadMoreCategory}
+                  >
+                    {categoryLoadingMore ? (
+                      <ActivityIndicator size="small" color="#E31837" />
+                    ) : (
+                      <Text style={{ color: "#E31837", fontWeight: "bold" }}>
+                        Mostrar mais
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+
+                {/* MOSTRAR MAIS - BUSCA */}
+                {!activeCategory && searchQuery.trim() && hasMore && (
+                  <TouchableOpacity
+                    style={{ marginVertical: 20, alignItems: "center" }}
+                    disabled={loadingMore}
+                    onPress={() =>
+                      executeSearch(searchQuery, searchOffset + searchLimit)
+                    }
+                  >
+                    {loadingMore ? (
+                      <ActivityIndicator size="small" color="#E31837" />
+                    ) : (
+                      <Text style={{ color: "#E31837", fontWeight: "bold" }}>
+                        Mostrar mais
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                )}
 
                 {/* OFERTAS - só fora do modo busca */}
-                {!searchQuery.trim() && randomOffers.length > 0 && (
+                {randomOffers.length > 0 && (
                   <>
                     <View style={styles.sectionHeader}>
                       <Text style={styles.sectionTitleText}>
@@ -586,7 +663,6 @@ export default function HomeScreen() {
                               style={styles.offerImagePlaceholder}
                             />
                           ) : (
-                            // 🔹 Correção do Placeholder
                             <View
                               style={[
                                 styles.offerImagePlaceholder,
@@ -604,10 +680,11 @@ export default function HomeScreen() {
                               />
                             </View>
                           )}
+
                           <Text style={styles.offerName} numberOfLines={1}>
-                            {/* 🔹 Correção da Letra Maiúscula */}
                             {capitalizeFirstLetter(offer.name)}
                           </Text>
+
                           <Text style={styles.promoPriceText}>
                             {formatPrice(offer.price)}
                           </Text>

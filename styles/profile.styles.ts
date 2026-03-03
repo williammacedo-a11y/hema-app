@@ -78,7 +78,7 @@ export const styles = StyleSheet.create({
   logoutButton: {
     backgroundColor: '#E31837', // Vermelho principal
     paddingVertical: 15,
-    borderRadius: 4,
+    borderRadius: 100,
     alignItems: 'center',
     justifyContent: 'center',
   },
