@@ -30,6 +30,7 @@ import {
   preloadPriorityCategories,
 } from "@/services/categories";
 import SearchBar from "@/components/SearchBar";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function HomeScreen() {
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -54,6 +55,7 @@ export default function HomeScreen() {
   const [categoryLimit] = useState(15);
   const [categoryHasMore, setCategoryHasMore] = useState(true);
   const [categoryLoadingMore, setCategoryLoadingMore] = useState(false);
+  const [userName, setUserName] = useState<string>("");
   const [categoryCache, setCategoryCache] = useState<Record<string, Product[]>>(
     {},
   );
@@ -71,6 +73,21 @@ export default function HomeScreen() {
     }
 
     load();
+  }, []);
+
+  useEffect(() => {
+    const getCachedName = async () => {
+      try {
+        const name = await AsyncStorage.getItem("@hema_user_name");
+        if (name) {
+          // Pega apenas o primeiro nome para ficar mais amigável
+          setUserName(name.split(" ")[0]);
+        }
+      } catch (e) {
+        console.error("Erro ao buscar nome no cache", e);
+      }
+    };
+    getCachedName();
   }, []);
 
   // 🔹 Debounce search
@@ -431,7 +448,7 @@ export default function HomeScreen() {
                   }}
                   numberOfLines={1}
                 >
-                  Hema Cereais
+                  {userName || "Hema Cereais"}
                 </Text>
               </View>
 
