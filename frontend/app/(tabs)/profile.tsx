@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,12 @@ import {
 } from "react-native";
 
 // Importação dos estilos separados
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { styles } from "../../styles/profile.styles";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { getProfile } from "../../services/profile";
+import { logout } from "../../services/auth";
+import { router } from "expo-router";
 
 // Mock de dados do usuário e opções
 const USER_DATA = {
@@ -27,9 +31,25 @@ const MENU_OPTIONS = [
 ];
 
 export default function ProfileScreen() {
-  const handleLogout = () => {
-    console.log("Usuário saiu");
-    // Aqui viria a lógica de autenticação
+  const [profile, setProfile] = useState({ name: "", email: "" });
+
+  useEffect(() => {
+    async function loadProfile() {
+      const data = await getProfile();
+      setProfile(data);
+    }
+
+    loadProfile();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.navigate("/auth");
+      await AsyncStorage.clear();
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   return (
@@ -45,8 +65,8 @@ export default function ProfileScreen() {
             <View style={styles.avatarPlaceholder}>
               <Text style={styles.avatarText}>RS</Text>
             </View>
-            <Text style={styles.userName}>{USER_DATA.name}</Text>
-            <Text style={styles.userEmail}>{USER_DATA.email}</Text>
+            <Text style={styles.userName}>{profile.name}</Text>
+            <Text style={styles.userEmail}>{profile.email}</Text>
           </View>
 
           {/* Seção de Menu */}

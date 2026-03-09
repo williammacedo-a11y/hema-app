@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -9,7 +9,7 @@ const supabase = createClient(
 // Função auxiliar para salvar no "cache"
 const saveUserCache = async (name: string) => {
   try {
-    await AsyncStorage.setItem('@hema_user_name', name);
+    await AsyncStorage.setItem("@hema_user_name", name);
   } catch (e) {
     console.error("Erro ao salvar cache", e);
   }
@@ -23,7 +23,7 @@ export async function signup(email: string, password: string, name: string) {
   });
 
   if (error) throw error;
-  
+
   if (data.user?.user_metadata?.name) {
     await saveUserCache(data.user.user_metadata.name);
   }
@@ -45,4 +45,12 @@ export async function login(email: string, password: string) {
   }
 
   return data;
+}
+
+export async function logout() {
+  const { error } = await supabase.auth.signOut();
+
+  if (error) {
+    throw error;
+  }
 }

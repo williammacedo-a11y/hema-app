@@ -33,10 +33,8 @@ export default function AuthScreen() {
   const router = useRouter();
 
   const toggleMode = () => {
-    // Animação suave ao alternar entre Login e Cadastro
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setIsLogin(!isLogin);
-    // Limpa os campos ao trocar de modo
     if (!isLogin) setName("");
     setPassword("");
   };
