@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,10 +11,10 @@ import {
   LayoutAnimation,
   UIManager,
 } from "react-native";
+import { Stack, useRouter } from "expo-router"; 
 import { styles } from "../styles/auth.styles";
-import { login } from "../services/auth";
-import { signup } from "../services/auth";
-import { useRouter } from "expo-router";
+import { login, signup } from "../services/auth";
+import { View as MotiView, Text as MotiText, AnimatePresence } from "moti";
 
 if (
   Platform.OS === "android" &&
@@ -26,17 +26,15 @@ if (
 export default function AuthScreen() {
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState("");
+  const [token, setToken] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
-  const [token, setToken] = useState("");
   const router = useRouter();
 
   const toggleMode = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setIsLogin(!isLogin);
-    if (!isLogin) setName("");
-    setPassword("");
   };
 
   async function handleLogin() {
@@ -74,38 +72,56 @@ export default function AuthScreen() {
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
+      <Stack.Screen options={{ headerShown: false }} />
+
       <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
         <View style={styles.innerContainer}>
-          {/* Header */}
           <View style={styles.header}>
-            <Text style={styles.logo}>HEMA</Text>
+            <MotiText
+              from={{ opacity: 0, scale: 0.5 }}
+              animate={{ opacity: 1, scale: 1 }}
+              style={styles.logo}
+            >
+              HEMA
+            </MotiText>
             <Text style={styles.subtitle}>
               Alimentos naturais entregues na sua casa
             </Text>
           </View>
 
-          {/* Formulário */}
           <View style={styles.form}>
-            {!isLogin && (
-              <View
-                style={[
-                  styles.inputWrapper,
-                  focusedInput === "name" && styles.inputWrapperFocused,
-                ]}
-              >
-                <TextInput
-                  style={styles.input}
-                  placeholder="Nome completo"
-                  placeholderTextColor="#999"
-                  value={name}
-                  onChangeText={setName}
-                  onFocus={() => setFocusedInput("name")}
-                  onBlur={() => setFocusedInput(null)}
-                  autoCapitalize="words"
-                />
-              </View>
-            )}
+            {/* O segredo está aqui: AnimatePresence gerencia a entrada e saída */}
+            <AnimatePresence exitBeforeEnter>
+              {!isLogin && (
+                <MotiView
+                  key="name-input"
+                  from={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  animate={{ opacity: 1, height: 70, marginBottom: 15 }} // Ajuste o height conforme seu estilo
+                  exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                  transition={{ type: "timing", duration: 250 }}
+                  style={{ overflow: "hidden" }} // Impede o texto de vazar na animação
+                >
+                  <View
+                    style={[
+                      styles.inputWrapper,
+                      focusedInput === "name" && styles.inputWrapperFocused,
+                    ]}
+                  >
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Nome completo"
+                      placeholderTextColor="#999"
+                      value={name}
+                      onChangeText={setName}
+                      onFocus={() => setFocusedInput("name")}
+                      onBlur={() => setFocusedInput(null)}
+                    />
+                  </View>
+                </MotiView>
+              )}
+            </AnimatePresence>
 
+            {/* Email e Senha podem ser fixos ou animados também */}
             <View
               style={[
                 styles.inputWrapper,
@@ -143,21 +159,27 @@ export default function AuthScreen() {
               />
             </View>
 
-            {/* Botão Principal */}
+            {/* Botão Principal com transição de texto suave */}
             <TouchableOpacity
               style={styles.primaryButton}
               activeOpacity={0.8}
               onPress={isLogin ? handleLogin : handleSignup}
             >
-              <Text style={styles.primaryButtonText}>
-                {isLogin ? "Entrar" : "Criar conta"}
-              </Text>
+              <AnimatePresence exitBeforeEnter>
+                <MotiText
+                  key={isLogin ? "login-txt" : "signup-txt"}
+                  from={{ opacity: 0, translateY: 5 }}
+                  animate={{ opacity: 1, translateY: 0 }}
+                  exit={{ opacity: 0, translateY: -5 }}
+                  style={styles.primaryButtonText}
+                >
+                  {isLogin ? "Entrar" : "Criar conta"}
+                </MotiText>
+              </AnimatePresence>
             </TouchableOpacity>
 
-            {/* Botão Secundário */}
             <TouchableOpacity
               style={styles.secondaryButton}
-              activeOpacity={0.6}
               onPress={toggleMode}
             >
               <Text style={styles.secondaryText}>

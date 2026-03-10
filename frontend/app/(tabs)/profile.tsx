@@ -15,12 +15,6 @@ import { getProfile } from "../../services/profile";
 import { logout } from "../../services/auth";
 import { router } from "expo-router";
 
-// Mock de dados do usuário e opções
-const USER_DATA = {
-  name: "Rodrigo Silva",
-  email: "rodrigo.silva@email.com",
-};
-
 const MENU_OPTIONS = [
   { id: "1", title: "Meus Pedidos" },
   { id: "2", title: "Endereço de Entrega" },
@@ -30,13 +24,24 @@ const MENU_OPTIONS = [
   { id: "6", title: "Ajuda e Suporte" },
 ];
 
+interface UserState {
+  name: string;
+  email: string;
+}
+
 export default function ProfileScreen() {
-  const [profile, setProfile] = useState({ name: "", email: "" });
+  const [user, setUser] = useState<UserState>({
+    name: "",
+    email: "",
+  });
 
   useEffect(() => {
     async function loadProfile() {
-      const data = await getProfile();
-      setProfile(data);
+      const name = await AsyncStorage.getItem("@hema_user_name");
+      const email = await AsyncStorage.getItem("@hema_user_email");
+      if (name && email) {
+        setUser((user) => ({ ...user, name, email }));
+      }
     }
 
     loadProfile();
@@ -45,11 +50,25 @@ export default function ProfileScreen() {
   const handleLogout = async () => {
     try {
       await logout();
-      router.navigate("/auth");
       await AsyncStorage.clear();
+      router.replace("/auth");
     } catch (error) {
       console.log(error);
     }
+  };
+
+  const getInitials = (name: string) => {
+    if (!name) return "";
+
+    const names = name.trim().split(" ");
+
+    if (names.length === 1) {
+      return names[0].charAt(0).toUpperCase();
+    }
+
+    return (
+      names[0].charAt(0) + names[names.length - 1].charAt(0)
+    ).toUpperCase();
   };
 
   return (
@@ -63,10 +82,10 @@ export default function ProfileScreen() {
           {/* Seção Superior: Avatar e Infos */}
           <View style={styles.headerSection}>
             <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>RS</Text>
+              <Text style={styles.avatarText}>{getInitials(user.name)}</Text>
             </View>
-            <Text style={styles.userName}>{profile.name}</Text>
-            <Text style={styles.userEmail}>{profile.email}</Text>
+            <Text style={styles.userName}>{user.name}</Text>
+            <Text style={styles.userEmail}>{user.email}</Text>
           </View>
 
           {/* Seção de Menu */}

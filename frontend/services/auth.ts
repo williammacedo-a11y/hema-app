@@ -7,9 +7,10 @@ const supabase = createClient(
 );
 
 // Função auxiliar para salvar no "cache"
-const saveUserCache = async (name: string) => {
+const saveUserCache = async (name: string, email: string) => {
   try {
     await AsyncStorage.setItem("@hema_user_name", name);
+    await AsyncStorage.setItem("@hema_user_email", email);
   } catch (e) {
     console.error("Erro ao salvar cache", e);
   }
@@ -25,7 +26,10 @@ export async function signup(email: string, password: string, name: string) {
   if (error) throw error;
 
   if (data.user?.user_metadata?.name) {
-    await saveUserCache(data.user.user_metadata.name);
+    await saveUserCache(
+      data.user.user_metadata.name,
+      data.user.user_metadata.email,
+    );
   }
 
   return data;
@@ -41,7 +45,7 @@ export async function login(email: string, password: string) {
 
   const userName = data.user?.user_metadata?.name;
   if (userName) {
-    await saveUserCache(userName);
+    await saveUserCache(userName, data.user.user_metadata.email);
   }
 
   return data;
