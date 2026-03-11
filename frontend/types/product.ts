@@ -1,10 +1,15 @@
 export interface Product {
   id: string;
   name: string;
-  price: number;
-  quantity: number;
-  image_url: string;
   description: string;
-  createdAt: string;
-  score?: number;
+  type: "unit" | "weight";
+  price: number;
+  price_per_kg: number;
+  image_url: string;
+}
+
+export interface CategoryCatalog {
+  id: string;
+  name: string;
+  products: Product[];
 }

@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
-import { supabase } from "../../services/supabase";
 import {
   Image,
   ScrollView,
@@ -14,7 +13,9 @@ import {
 
 import { useCart } from "@/context/CartContext";
 import { Product } from "@/types/product";
+import { getProductById, getSimilarProducts } from "@/services/products";
 import { styles } from "../../styles/product.styles";
+import { formatProductPrice } from "@/util/formatProductPrice";
 
 export default function ProductDetailsScreen() {
   const router = useRouter();
@@ -23,78 +24,26 @@ export default function ProductDetailsScreen() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [similarProducts, setSimilarProducts] = useState<Product[]>([]);
+  const [showFullDescription, setShowFullDescription] = useState(false);
 
   useEffect(() => {
-    async function loadProduct() {
+    async function loadData() {
       if (!id) return;
+      setLoading(true);
 
-      const { data, error } = await supabase
-        .from("produtos_hema_cereais")
-        .select("*")
-        .eq("id", id)
-        .single();
+      const [productData, similarData] = await Promise.all([
+        getProductById(id),
+        getSimilarProducts(id),
+      ]);
 
-      if (!error && data) {
-        setProduct({
-          id: data.id,
-          name: data.nome ?? "",
-          price: parseFloat(
-            String(data.preço ?? data.preco ?? 0).replace(",", "."),
-          ),
-          quantity: Number(data.quantidade ?? 0),
-          description: data.descricao ?? "",
-          image_url:
-            data.url_imagem && data.url_imagem.length > 0
-              ? data.url_imagem
-              : null,
-          createdAt: data.created_at,
-        });
+      if (productData) {
+        setProduct(productData);
       }
-
-      const { data: doc } = await supabase
-        .from("documents")
-        .select("embedding")
-        .eq("id_produto", id)
-        .single();
-
-      if (doc?.embedding) {
-        const { data: similarDocs } = await supabase.rpc(
-          "match_similar_products",
-          {
-            query_embedding: doc.embedding,
-            current_id: id,
-            match_count: 10,
-          },
-        );
-
-        if (similarDocs?.length) {
-          const ids = similarDocs.map((d: any) => d.id_produto);
-
-          const { data: products } = await supabase
-            .from("produtos_hema_cereais")
-            .select("*")
-            .in("id", ids);
-
-          if (products) {
-            setSimilarProducts(
-              products.map((p: any) => ({
-                id: p.id,
-                name: p.nome,
-                price: p.preço,
-                quantity: Number(p.quantidade),
-                description: p.descricao ?? "",
-                image_url: p.url_imagem ?? "",
-                createdAt: p.created_at,
-              })),
-            );
-          }
-        }
-      }
-
+      setSimilarProducts(similarData);
       setLoading(false);
     }
 
-    loadProduct();
+    loadData();
   }, [id]);
 
   if (loading) {
@@ -129,13 +78,6 @@ export default function ProductDetailsScreen() {
     );
   }
 
-  const formatPrice = (price: number) => {
-    return price.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
-  };
-
   const handleAddToCart = async () => {
     await addToCart({
       nome: product.name,
@@ -147,7 +89,6 @@ export default function ProductDetailsScreen() {
     });
 
     console.log(typeof product.price, product.price);
-    // Vai direto para o carrinho após adicionar
     router.push("/cart");
   };
 
@@ -167,12 +108,13 @@ export default function ProductDetailsScreen() {
         {/* IMAGEM DO PRODUTO */}
         <View style={styles.imageContainer}>
           {product.image_url ? (
-            <Image source={{ uri: product.image_url }} />
+            <Image
+              source={{ uri: product.image_url.trim() }}
+              style={{ width: "100%", height: "100%" }}
+              resizeMode="cover"
+            />
           ) : (
-            <>
-              <Ionicons name="image-outline" size={60} color="#DDD" />
-              <Text style={styles.noImageText}>Sem foto</Text>
-            </>
+            <Ionicons name="image-outline" size={60} color="#DDD" />
           )}
         </View>
 
@@ -183,18 +125,32 @@ export default function ProductDetailsScreen() {
 
           <View style={styles.priceContainer}>
             <Text style={styles.productPrice}>
-              {formatPrice(product.price)}
+              {formatProductPrice(product)}
             </Text>
-            <Text style={styles.unitText}>/ unidade</Text>
           </View>
 
           <View style={styles.divider} />
 
           <Text style={styles.descriptionTitle}>Descrição</Text>
-          <Text style={styles.descriptionText}>
+
+          <Text
+            style={styles.descriptionText}
+            numberOfLines={showFullDescription ? undefined : 3}
+          >
             {product.description ||
               "Nenhuma descrição disponível para este produto."}
           </Text>
+
+          {product.description && (
+            <TouchableOpacity
+              onPress={() => setShowFullDescription(!showFullDescription)}
+              style={styles.readMoreButton}
+            >
+              <Text style={styles.readMoreText}>
+                {showFullDescription ? "Ler menos" : "Ler mais..."}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {similarProducts.length > 0 && (
@@ -218,7 +174,7 @@ export default function ProductDetailsScreen() {
                 <View style={{ marginLeft: 10, flex: 1 }}>
                   <Text numberOfLines={2}>{item.name}</Text>
                   <Text style={{ fontWeight: "bold" }}>
-                    {formatPrice(item.price)}
+                    {formatProductPrice(item)}
                   </Text>
                 </View>
               </TouchableOpacity>

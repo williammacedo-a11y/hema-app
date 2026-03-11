@@ -80,8 +80,17 @@ export const styles = StyleSheet.create({
   },
   descriptionText: {
     fontSize: 14,
+    lineHeight: 20,
     color: "#666",
-    lineHeight: 22,
+    marginBottom: 4,
+  },
+  readMoreButton: {
+    paddingVertical: 4,
+  },
+  readMoreText: {
+    color: "#E31837", // Vermelho da sua marca
+    fontWeight: "700",
+    fontSize: 14,
   },
   // --- RODAPÉ FIXO ---
   footer: {

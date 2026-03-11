@@ -1,26 +1,100 @@
 import { Injectable } from '@nestjs/common';
-import { CreateProductDto } from './dto/create-product.dto';
-import { UpdateProductDto } from './dto/update-product.dto';
+import { supabase } from 'src/lib/supabase';
 
 @Injectable()
 export class ProductsService {
-  create(createProductDto: CreateProductDto) {
-    return 'This action adds a new product';
+  
+  async getHomeCatalog() {
+    const targetCategories = [
+      'Whey',
+      'Creatina',
+      'Snacks e Barras',
+      'Vitaminas',
+      'Pré-Treinos',
+      'Vagenos',
+    ];
+
+    const { data, error } = await supabase
+      .from('categories')
+      .select(
+        `
+      id,
+      name,
+      products (
+        id,
+        name,
+        price,
+        price_per_kg,
+        image_url,
+        type
+      )
+    `,
+      )
+      .in('name', targetCategories)
+      .not('products.image_url', 'is', null)
+      .limit(10, { foreignTable: 'products' });
+
+    if (error) {
+      throw new Error(`Erro Supabase: ${error.message}`);
+    }
+
+    return data;
   }
 
-  findAll() {
-    return `This action returns all products`;
+  async findOne(id: string) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error) {
+      console.error('❌ Erro detalhado do Supabase:', error);
+      throw new Error(`Erro Supabase: ${error.message}`);
+    }
+
+    if (error || !data) throw new Error('Produto não encontrado');
+
+    return {
+      id: data.id,
+      name: data.name,
+      description: data.description,
+      type: data.type,
+      price: data.price,
+      price_per_kg: data.price_per_kg,
+      image_url: data.image_url,
+    };
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} product`;
+  async findSimilar(productId: string) {
+    const { data: product, error } = await supabase
+      .from('products')
+      .select('id, name, category_id')
+      .eq('id', productId)
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    const { data, error: error2 } = await supabase
+      .from('products')
+      .select('id, name, price, price_per_kg, image_url, type')
+      .eq('category_id', product.category_id)
+      .neq('id', productId)
+      .limit(10);
+
+    if (error2) throw new Error(error2.message);
+
+    return data;
   }
 
-  update(id: number, updateProductDto: UpdateProductDto) {
-    return `This action updates a #${id} product`;
-  }
+  async findCategoryProducts(categoryId: string) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('id, name, price, price_per_kg, image_url, type')
+      .eq('category_id', categoryId);
 
-  remove(id: number) {
-    return `This action removes a #${id} product`;
+    if (error) throw new Error(error.message);
+
+    return data;
   }
 }
