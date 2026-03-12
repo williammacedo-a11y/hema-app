@@ -7,7 +7,7 @@ export async function getHomeCatalog(): Promise<CategoryCatalog[]> {
     const response = await fetch(API_URL);
 
     if (!response.ok) {
-      throw new Error(`Erro na requisição: ${response.statusText}`);
+      throw new Error(`Erro na requisição para a url: ${API_URL}`);
     }
 
     const data = await response.json();

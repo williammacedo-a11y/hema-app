@@ -69,6 +69,7 @@ export default function CategoryScreen() {
                 product={item}
                 onPress={() => router.push(`/product/${item.id}`)}
                 onAdd={() => console.log("Adicionado", item.name)}
+                isGrid={true}
               />
             </View>
           )}

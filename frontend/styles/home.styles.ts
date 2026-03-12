@@ -14,8 +14,8 @@ export const styles = StyleSheet.create({
   // --- HEADER & PLACEHOLDER ---
   headerContainer: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
+    paddingTop: 5,
+    paddingBottom: 15,
     backgroundColor: "#E31837",
   },
   welcomeText: {
@@ -62,57 +62,6 @@ export const styles = StyleSheet.create({
   horizontalListContent: {
     paddingLeft: 16,
     paddingRight: 8,
-  },
-  // --- PRODUCT CARD ---
-  productCard: {
-    backgroundColor: "#FFF",
-    width: 150, // Tamanho fixo para o carrossel
-    marginRight: 16,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "#F0F0F0",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-  },
-  productImage: {
-    height: 120,
-    backgroundColor: "#FBFBFB",
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-  },
-  imageFallback: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  productInfo: {
-    padding: 12,
-  },
-  productName: {
-    fontSize: 13,
-    color: "#222",
-    height: 36,
-    marginBottom: 4,
-    lineHeight: 18,
-  },
-  productPrice: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: "#1A1A1A",
-    marginBottom: 10,
-  },
-  addButton: {
-    backgroundColor: "#E31837",
-    paddingVertical: 8,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  addButtonText: {
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "700",
   },
   // --- LOADING ---
   loadingContainer: {

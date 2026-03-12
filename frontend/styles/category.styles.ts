@@ -46,18 +46,16 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
   listContent: {
-    paddingHorizontal: 16, // Espaçamento nas laterais da tela
+    paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 40,
   },
   columnWrapper: {
-    gap: 16, // Cria um buraco exato de 16px entre os dois cards
-    width: "100%",
+    justifyContent: "space-between",
+    marginBottom: 16,
   },
   cardWrapper: {
-    flex: 1, // Faz o card crescer e ocupar o espaço que sobrar na coluna perfeitamente
-    maxWidth: "48%", // Evita que o último card fique gigante se for ímpar
-    marginBottom: 16,
+    width: "48%", // metade da tela com margem
   },
   emptyContainer: {
     flex: 1,
