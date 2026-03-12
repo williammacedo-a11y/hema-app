@@ -32,7 +32,7 @@ export const cardStyles = StyleSheet.create({
     width: "100%",
   },
   imageFallback: {
-    height: 120,
+    height: "100%",
     justifyContent: "center",
     alignItems: "center",
   },

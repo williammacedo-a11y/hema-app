@@ -29,7 +29,7 @@ export default function HomeScreen() {
       <StatusBar barStyle="light-content" backgroundColor="#E31837" />
 
       {/* HEADER ISOLADO */}
-      <HomeHeader userName={userName} />
+      <HomeHeader />
 
       <View style={styles.mainContainer}>
         {loading ? (

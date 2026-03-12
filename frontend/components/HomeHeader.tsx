@@ -1,14 +1,18 @@
 import React from "react";
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity, Image } from "react-native";
 import { styles } from "@/styles/home.styles";
 
-interface Props {
-  userName: string;
-}
-
-export function HomeHeader({ userName }: Props) {
+export function HomeHeader() {
   return (
     <View style={styles.headerContainer}>
+      {/* Logo Redonda */}
+      <Image
+        source={require("@/assets/images/logo.jpg")}
+        style={styles.logo}
+        resizeMode="cover"
+      />
+
+      {/* Barra de Busca */}
       <TouchableOpacity style={styles.searchPlaceholder} activeOpacity={0.8}>
         <Text style={styles.searchPlaceholderText}>Buscar produtos...</Text>
       </TouchableOpacity>

@@ -17,29 +17,30 @@ export const styles = StyleSheet.create({
     paddingTop: 5,
     paddingBottom: 15,
     backgroundColor: "#E31837",
-  },
-  welcomeText: {
-    color: "#FFF",
-    fontSize: 13,
-    opacity: 0.75,
-    marginBottom: 4,
-  },
-  userName: {
-    color: "#FFF",
-    fontSize: 24,
-    fontWeight: "700",
-    marginBottom: 16,
+    // --- ADICIONE ESTAS LINHAS ---
+    flexDirection: "row", // Alinha Logo e Busca lado a lado
+    alignItems: "center", // Centraliza verticalmente
+    gap: 12, // Dá um espaçamento entre a logo e a busca
   },
   searchPlaceholder: {
     height: 46,
-    backgroundColor: "rgba(255, 255, 255, 0.2)", // Fundo semi-transparente
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
     borderRadius: 24,
     justifyContent: "center",
     paddingHorizontal: 20,
+    flex: 1, 
   },
   searchPlaceholderText: {
     color: "#FFF",
     opacity: 0.8,
+    fontSize: 14,
+    marginTop: 12,
+    flex: 1,
+  },
+  logo: {
+    width: 44, // Ajuste para a altura da sua navbar
+    height: 44,
+    borderRadius: 22, // Metade do tamanho para ficar redonda
   },
   // --- SEÇÕES E CARROSSÉIS ---
   sectionContainer: {

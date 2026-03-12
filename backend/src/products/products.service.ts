@@ -3,7 +3,6 @@ import { supabase } from 'src/lib/supabase';
 
 @Injectable()
 export class ProductsService {
-  
   async getHomeCatalog() {
     const targetCategories = [
       'Whey',
@@ -11,7 +10,11 @@ export class ProductsService {
       'Snacks e Barras',
       'Vitaminas',
       'Pré-Treinos',
-      'Vagenos',
+      'Veganos',
+      'Chás e Ervas',
+      'Colágenos',
+      'Cereais e Grãos',
+      'Sementes',
     ];
 
     const { data, error } = await supabase
@@ -32,7 +35,8 @@ export class ProductsService {
       )
       .in('name', targetCategories)
       .not('products.image_url', 'is', null)
-      .limit(10, { foreignTable: 'products' });
+      .limit(10, { foreignTable: 'products' })
+      .order('name', { ascending: false });
 
     if (error) {
       throw new Error(`Erro Supabase: ${error.message}`);

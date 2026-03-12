@@ -13,7 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { styles } from "../../styles/cart.styles";
 import { useCart } from "@/context/CartContext";
-import { CartItem } from "@/services/cart";
+import { CartItems } from "@/types/cart";
 
 export default function CartScreen() {
   const { cartItems, updateQuantity, removeItem } = useCart();
