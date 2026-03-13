@@ -19,7 +19,7 @@ import { formatProductPrice } from "@/util/formatProductPrice";
 
 export default function ProductDetailsScreen() {
   const router = useRouter();
-  const { addToCart } = useCart();
+  const { addItem } = useCart();
   const { id } = useLocalSearchParams<{ id: string }>();
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,7 +79,7 @@ export default function ProductDetailsScreen() {
   }
 
   const handleAddToCart = async () => {
-    await addToCart({
+    await addItem({
       nome: product.name,
       tipo: "UNITARIO",
       total: product.price,

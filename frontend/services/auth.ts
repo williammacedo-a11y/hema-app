@@ -25,6 +25,12 @@ export async function signup(email: string, password: string, name: string) {
 
   if (error) throw error;
 
+  const accessToken = data.session?.access_token;
+
+  if (accessToken) {
+    await AsyncStorage.setItem("@hema_token", accessToken);
+  }
+
   if (data.user?.user_metadata?.name) {
     await saveUserCache(
       data.user.user_metadata.name,
@@ -43,7 +49,19 @@ export async function login(email: string, password: string) {
 
   if (error) throw error;
 
+  const accessToken = data.session?.access_token;
+  const refreshToken = data.session?.refresh_token;
+
+  if (accessToken) {
+    await AsyncStorage.setItem("@hema_token", accessToken);
+  }
+
+  if (refreshToken) {
+    await AsyncStorage.setItem("@hema_refresh", refreshToken);
+  }
+
   const userName = data.user?.user_metadata?.name;
+
   if (userName) {
     await saveUserCache(userName, data.user.user_metadata.email);
   }
@@ -52,9 +70,10 @@ export async function login(email: string, password: string) {
 }
 
 export async function logout() {
-  const { error } = await supabase.auth.signOut();
+  await supabase.auth.signOut();
 
-  if (error) {
-    throw error;
-  }
+  await AsyncStorage.removeItem("@hema_token");
+  await AsyncStorage.removeItem("@hema_refresh");
+  await AsyncStorage.removeItem("@hema_user_name");
+  await AsyncStorage.removeItem("@hema_user_email");
 }

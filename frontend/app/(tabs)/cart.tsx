@@ -11,19 +11,27 @@ import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { useRouter } from "expo-router";
+import { SuccessToast, ErrorToast } from "@/components/CustomToast";
 import { styles } from "../../styles/cart.styles";
 import { useCart } from "@/context/CartContext";
 import { CartItemWithProduct } from "@/types/cart";
 
 export default function CartScreen() {
-  const { removeItem, addItem, items, cart } = useCart();
+  const { removeItem, updateItem, items, cart } = useCart();
   const router = useRouter();
 
   const subtotal = useMemo(() => {
-    return (items || []).reduce(
-      (acc, item) => acc + item.total * item.qtd_numerica,
-      0,
-    );
+    return (items || []).reduce((acc, item) => {
+      if (item.quantity) {
+        return acc + item.price * item.quantity;
+      }
+
+      if (item.weight) {
+        return acc + item.price;
+      }
+
+      return acc;
+    }, 0);
   }, [items]);
 
   const formatPrice = (price?: number) =>
@@ -31,6 +39,38 @@ export default function CartScreen() {
       style: "currency",
       currency: "BRL",
     });
+
+  function validateWeight(weight: number) {
+    if (weight < 50) {
+      ErrorToast({ text1: "Peso mínimo é de 50g" });
+      return false;
+    }
+
+    return true;
+  }
+
+  function updateQuantity(
+    item: CartItemWithProduct,
+    action: "increase" | "decrease",
+  ) {
+    if (item.product.type === "unit") {
+      const newQuantity =
+        action === "increase"
+          ? item.quantity || 0 + 1
+          : Math.max(1, item.quantity || 0 - 1);
+
+      updateItem(item.id, { quantity: newQuantity });
+    } else {
+      const newWeight =
+        action === "increase"
+          ? item.weight || 0 + 50
+          : Math.max(50, item.weight || 0 - 50);
+
+      if (!validateWeight(newWeight)) return;
+
+      updateItem(item.id, { weight: newWeight });
+    }
+  }
 
   const renderCartItem = ({ item }: { item: CartItemWithProduct }) => (
     <View style={styles.cartItem}>
@@ -57,25 +97,29 @@ export default function CartScreen() {
           </Text>
           {/* Mostrando o preço unitário e o tipo (ex: 1 un) */}
           <Text style={{ fontSize: 12, color: "#666", marginBottom: 2 }}>
-            {item.product.qtd_desc}
+            {item.product.price}
           </Text>
-          <Text style={styles.itemPrice}>{formatPrice(item.product.price)}</Text>
+          <Text style={styles.qtyText}>
+            {item.product.type === "unit"
+              ? formatPrice(item.product.price || 0)
+              : formatPrice(item.price)}
+          </Text>
         </View>
 
         <View style={styles.itemFooter}>
           {/* Controle de Quantidade */}
           <View style={styles.quantityContainer}>
             <TouchableOpacity
-              onPress={() => updateQuantity(item.product.name, "decrease")}
+              onPress={() => updateQuantity(item, "decrease")}
               style={styles.qtyButton}
             >
               <Text style={styles.qtyButtonText}>-</Text>
             </TouchableOpacity>
 
-            <Text style={styles.qtyText}>{item.qtd_numerica}</Text>
+            <Text style={styles.qtyText}>{item.quantity}</Text>
 
             <TouchableOpacity
-              onPress={() => updateQuantity(item.product.name, "increase")}
+              onPress={() => updateQuantity(item, "increase")}
               style={styles.qtyButton}
             >
               <Text style={styles.qtyButtonText}>+</Text>
@@ -84,7 +128,7 @@ export default function CartScreen() {
 
           {/* Botão Remover */}
           <TouchableOpacity
-            onPress={() => removeItem(item.product.name)}
+            onPress={() => removeItem(item.id)}
             style={styles.removeButton}
           >
             <Text style={styles.removeButtonText}>Remover</Text>
@@ -107,9 +151,9 @@ export default function CartScreen() {
 
           {/* Lista de Produtos Reais do Banco */}
           <FlatList
-            data={cartItems}
+            data={items}
             renderItem={renderCartItem}
-            keyExtractor={(item) => item.nome} // Chave única baseada no nome
+            keyExtractor={(item) => item.id} // Chave única baseada no id
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
@@ -118,7 +162,7 @@ export default function CartScreen() {
           />
 
           {/* Resumo e Botão Finalizar */}
-          {cartItems.length > 0 && (
+          {items.length > 0 && (
             <View style={styles.footerContainer}>
               <View style={styles.subtotalRow}>
                 <Text style={styles.subtotalLabel}>Subtotal</Text>

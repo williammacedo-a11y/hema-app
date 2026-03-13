@@ -1,45 +1,70 @@
-interface CartContextData {
-  cart: any;
-  items: any[];
+import React, { createContext, useContext, useState, useEffect } from "react";
+import * as cartService from "@/services/cart";
+
+type Cart = any;
+type CartItem = any;
+
+type CartContextType = {
+  cart: Cart | null;
+  items: CartItem[];
   loading: boolean;
-
   refreshCart: () => Promise<void>;
-  addItem: (data: AddCartItemDTO) => Promise<void>;
+  addItem: (data: any) => Promise<void>;
+  updateItem: (id: string, data: any) => Promise<void>;
   removeItem: (id: string) => Promise<void>;
-}
+};
 
-import React, { createContext, useState, useContext, useEffect } from "react";
-import {
-  addCartItem,
-  AddCartItemDTO,
-} from "@/services/cart";
+const CartContext = createContext<CartContextType | null>(null);
 
-const CartContext = createContext({} as CartContextData);
-
-export function CartProvider({ children }) {
-  const [cart, setCart] = useState(null);
-  const [items, setItems] = useState([]);
+export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [cart, setCart] = useState<Cart | null>(null);
+  const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function refreshCart() {
-    const data = await getCart();
+    try {
+      setLoading(true);
 
-    setCart(data.cart);
-    setItems(data.items);
+      const response = await cartService.getCartService();
+
+      setCart(response.cart);
+      setItems(response.items ?? []);
+    } catch (err) {
+      console.error("Erro ao buscar carrinho", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function addItem(dto: AddCartItemDTO) {
-    await addCartItem(dto);
-    await refreshCart();
+  async function addItem(data: any) {
+    try {
+      await cartService.addCartItemService(data);
+      await refreshCart();
+    } catch (err) {
+      console.error("Erro ao adicionar item", err);
+    }
+  }
+
+  async function updateItem(id: string, data: any) {
+    try {
+      await cartService.updateCartItemService(id, data);
+      await refreshCart();
+    } catch (err) {
+      console.error("Erro ao atualizar item", err);
+    }
   }
 
   async function removeItem(id: string) {
-    await removeCartItem(id);
-    await refreshCart();
+    try {
+      await cartService.removeCartItemService(id);
+      await refreshCart();
+    } catch (err) {
+      console.error("Erro ao remover item", err);
+    }
   }
 
   useEffect(() => {
-    refreshCart().finally(() => setLoading(false));
+    refreshCart();
   }, []);
 
   return (
@@ -50,6 +75,7 @@ export function CartProvider({ children }) {
         loading,
         refreshCart,
         addItem,
+        updateItem,
         removeItem,
       }}
     >
@@ -59,5 +85,11 @@ export function CartProvider({ children }) {
 }
 
 export function useCart() {
-  return useContext(CartContext);
+  const context = useContext(CartContext);
+
+  if (!context) {
+    throw new Error("useCart deve ser usado dentro de CartProvider");
+  }
+
+  return context;
 }
