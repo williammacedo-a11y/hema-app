@@ -30,6 +30,7 @@ export type CartItemWithProduct = {
     name: string;
     image_url: string | null;
     type: "unit" | "weight";
+    price: number | null;
   };
 };
 

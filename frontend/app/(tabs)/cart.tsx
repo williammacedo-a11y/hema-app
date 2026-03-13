@@ -13,18 +13,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { styles } from "../../styles/cart.styles";
 import { useCart } from "@/context/CartContext";
-import { CartItems } from "@/types/cart";
+import { CartItemWithProduct } from "@/types/cart";
 
 export default function CartScreen() {
-  const { cartItems, updateQuantity, removeItem } = useCart();
+  const { removeItem, addItem, items, cart } = useCart();
   const router = useRouter();
 
   const subtotal = useMemo(() => {
-    return (cartItems || []).reduce(
+    return (items || []).reduce(
       (acc, item) => acc + item.total * item.qtd_numerica,
       0,
     );
-  }, [cartItems]);
+  }, [items]);
 
   const formatPrice = (price?: number) =>
     (price ?? 0).toLocaleString("pt-BR", {
@@ -32,11 +32,11 @@ export default function CartScreen() {
       currency: "BRL",
     });
 
-  const renderCartItem = ({ item }: { item: CartItem }) => (
+  const renderCartItem = ({ item }: { item: CartItemWithProduct }) => (
     <View style={styles.cartItem}>
-      {item.image_url ? (
+      {item.product.image_url ? (
         <Image
-          source={{ uri: item.image_url }}
+          source={{ uri: item.product.image_url }}
           style={styles.imagePlaceholder}
         />
       ) : (
@@ -53,20 +53,20 @@ export default function CartScreen() {
       <View style={styles.itemDetails}>
         <View>
           <Text style={styles.itemName} numberOfLines={2}>
-            {item.nome}
+            {item.product.name}
           </Text>
           {/* Mostrando o preço unitário e o tipo (ex: 1 un) */}
           <Text style={{ fontSize: 12, color: "#666", marginBottom: 2 }}>
-            {item.qtd_desc}
+            {item.product.qtd_desc}
           </Text>
-          <Text style={styles.itemPrice}>{formatPrice(item.total)}</Text>
+          <Text style={styles.itemPrice}>{formatPrice(item.product.price)}</Text>
         </View>
 
         <View style={styles.itemFooter}>
           {/* Controle de Quantidade */}
           <View style={styles.quantityContainer}>
             <TouchableOpacity
-              onPress={() => updateQuantity(item.nome, "decrease")}
+              onPress={() => updateQuantity(item.product.name, "decrease")}
               style={styles.qtyButton}
             >
               <Text style={styles.qtyButtonText}>-</Text>
@@ -75,7 +75,7 @@ export default function CartScreen() {
             <Text style={styles.qtyText}>{item.qtd_numerica}</Text>
 
             <TouchableOpacity
-              onPress={() => updateQuantity(item.nome, "increase")}
+              onPress={() => updateQuantity(item.product.name, "increase")}
               style={styles.qtyButton}
             >
               <Text style={styles.qtyButtonText}>+</Text>
@@ -84,7 +84,7 @@ export default function CartScreen() {
 
           {/* Botão Remover */}
           <TouchableOpacity
-            onPress={() => removeItem(item.nome)}
+            onPress={() => removeItem(item.product.name)}
             style={styles.removeButton}
           >
             <Text style={styles.removeButtonText}>Remover</Text>

@@ -13,7 +13,7 @@ export class CartService {
       .from('products')
       .select('*')
       .eq('id', product_id)
-      .single();
+      .maybeSingle();
 
     if (productError || !product) {
       throw new Error('Produto não encontrado');
@@ -33,20 +33,28 @@ export class CartService {
       .from('carts')
       .select('*')
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     // 4️⃣ criar carrinho se não existir
     if (!cart) {
-      const { data: newCart } = await supabase
+      const { data: newCart, error: cartError } = await supabase
         .from('carts')
         .insert({
           user_id: userId,
           total_price: 0,
         })
         .select()
-        .single();
+        .maybeSingle();
 
+      if (cartError) {
+        console.error('Erro criando carrinho:', cartError);
+        throw new Error('Falha ao criar carrinho');
+      }
       cart = newCart;
+    }
+
+    if (!cart) {
+      throw new Error('Carrinho não encontrado');
     }
 
     // 5️⃣ verificar se item já existe
@@ -55,14 +63,14 @@ export class CartService {
       .select('*')
       .eq('cart_id', cart.id)
       .eq('product_id', product_id)
-      .single();
+      .maybeSingle();
 
     let price = 0;
 
     if (product.type === 'unit') {
       price = product.price;
     } else {
-      price = product.price_per_gram * product.weight;
+      price = product.price_per_kg * product.weight;
     }
 
     // 6️⃣ atualizar item existente
@@ -126,18 +134,141 @@ export class CartService {
     return {
       success: true,
       cart_id: cart.id,
+      total_price: total,
     };
   }
 
-  getCart() {
-    return `This action returns a cart`;
+  async getCart(userId: string) {
+    // 1️⃣ buscar carrinho do usuário
+    const { data: cart, error: cartError } = await supabase
+      .from('carts')
+      .select('*')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (cartError) {
+      throw new Error('Erro ao buscar carrinho');
+    }
+
+    if (!cart) {
+      return {
+        cart: null,
+        items: [],
+        total_price: 0,
+      };
+    }
+
+    // 2️⃣ buscar itens + produto
+    const { data: items, error: itemsError } = await supabase
+      .from('cart_items')
+      .select(
+        `
+      id,
+      quantity,
+      weight,
+      price,
+      product:products (
+        id,
+        name,
+        type,
+        image_url,
+        price,
+        price_per_kg
+      )
+    `,
+      )
+      .eq('cart_id', cart.id);
+
+    if (itemsError) {
+      throw new Error(
+        'Erro ao buscar itens do carrinho: ' + itemsError.message,
+      );
+    }
+
+    return {
+      cart,
+      items: items ?? [],
+      total_price: cart.total_price,
+    };
   }
 
-  updateItem(id: string, updateCartDto: UpdateCartItemDto) {
-    return `This action updates a #${id} cart`;
+  async updateItem(userId: string, itemId: string, dto: UpdateCartItemDto) {
+    const { data: item } = await supabase
+      .from('cart_items')
+      .select('*')
+      .eq('id', itemId)
+      .maybeSingle();
+
+    if (!item) {
+      throw new Error('Item não encontrado');
+    }
+
+    const { data: cart } = await supabase
+      .from('carts')
+      .select('user_id')
+      .eq('id', item.cart_id)
+      .maybeSingle();
+
+    if (!cart || cart.user_id !== userId) {
+      throw new Error('Item não pertence ao usuário');
+    }
+
+    await supabase.from('cart_items').update(dto).eq('id', itemId);
+
+    await this.recalculateCart(item.cart_id);
+
+    return { success: true };
   }
 
-  removeItem(id: string) {
-    return `This action removes a #${id} cart`;
+  async removeItem(userId: string, itemId: string) {
+    const { data: item } = await supabase
+      .from('cart_items')
+      .select('id, cart_id')
+      .eq('id', itemId)
+      .maybeSingle();
+
+    if (!item) {
+      throw new Error('Item não encontrado');
+    }
+
+    const { data: cart } = await supabase
+      .from('carts')
+      .select('user_id')
+      .eq('id', item.cart_id)
+      .maybeSingle();
+
+    if (!cart || cart.user_id !== userId) {
+      throw new Error('Item não pertence ao usuário');
+    }
+
+    await supabase.from('cart_items').delete().eq('id', itemId);
+
+    await this.recalculateCart(item.cart_id);
+
+    return { success: true };
+  }
+
+  async recalculateCart(cartId: string) {
+    const { data: items } = await supabase
+      .from('cart_items')
+      .select('*')
+      .eq('cart_id', cartId);
+
+    const total = (items ?? []).reduce((acc, item) => {
+      if (item.quantity) {
+        return acc + item.price * item.quantity;
+      }
+
+      if (item.weight) {
+        return acc + item.price;
+      }
+
+      return acc;
+    }, 0);
+
+    await supabase
+      .from('carts')
+      .update({ total_price: total })
+      .eq('id', cartId);
   }
 }

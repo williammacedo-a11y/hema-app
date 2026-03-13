@@ -1,131 +1,63 @@
-import React, { createContext, useState, useEffect, useContext } from "react";
-import { getCartFromDB, saveCartToDB, CartItem } from "@/services/cart";
-import Toast from "react-native-toast-message";
-
 interface CartContextData {
-  cartItems: CartItem[];
-  cartCount: number;
-  updateQuantity: (
-    nome: string,
-    action: "increase" | "decrease",
-  ) => Promise<void>;
-  removeItem: (nome: string) => Promise<void>;
-  addToCart: (item: CartItem) => Promise<void>;
+  cart: any;
+  items: any[];
+  loading: boolean;
+
+  refreshCart: () => Promise<void>;
+  addItem: (data: AddCartItemDTO) => Promise<void>;
+  removeItem: (id: string) => Promise<void>;
 }
 
-export const CartContext = createContext<CartContextData>(
-  {} as CartContextData,
-);
+import React, { createContext, useState, useContext, useEffect } from "react";
+import {
+  addCartItem,
+  AddCartItemDTO,
+} from "@/services/cart";
 
-function normalizeMoney(value: any): number {
-  if (typeof value === "number") return value;
+const CartContext = createContext({} as CartContextData);
 
-  if (!value) return 0;
+export function CartProvider({ children }) {
+  const [cart, setCart] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  return Number(
-    String(value).replace("R$", "").replace(/\./g, "").replace(",", ".").trim(),
-  );
-}
+  async function refreshCart() {
+    const data = await getCart();
 
-export const CartProvider = ({ children }: { children: React.ReactNode }) => {
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+    setCart(data.cart);
+    setItems(data.items);
+  }
+
+  async function addItem(dto: AddCartItemDTO) {
+    await addCartItem(dto);
+    await refreshCart();
+  }
+
+  async function removeItem(id: string) {
+    await removeCartItem(id);
+    await refreshCart();
+  }
 
   useEffect(() => {
-    async function load() {
-      const data = await getCartFromDB();
-
-      const normalized = (data || []).map((item) => ({
-        ...item,
-        total: normalizeMoney(item.total),
-        qtd_numerica: Number(item.qtd_numerica),
-      }));
-
-      setCartItems(normalized);
-    }
-
-    load();
+    refreshCart().finally(() => setLoading(false));
   }, []);
-
-  // Função interna para atualizar a tela e o banco ao mesmo tempo
-  const syncCart = async (newItems: CartItem[]) => {
-    setCartItems(newItems);
-    await saveCartToDB(newItems);
-  };
-
-  // CREATE / UPDATE (Adicionar produto novo ou somar se já existir)
-  const addToCart = async (newItem: CartItem) => {
-    const itemExists = cartItems.find((item) => item.nome === newItem.nome);
-
-    if (itemExists) {
-      const newItems = cartItems.map((item) =>
-        item.nome === newItem.nome
-          ? { ...item, qtd_numerica: item.qtd_numerica + 1 }
-          : item,
-      );
-      await syncCart(newItems);
-    } else {
-      await syncCart([...cartItems, newItem]);
-    }
-  };
-
-  // UPDATE (Aumentar ou diminuir quantidade)
-  const updateQuantity = async (
-    nome: string,
-    action: "increase" | "decrease",
-  ) => {
-    const newItems = cartItems.map((item) => {
-      if (item.nome === nome) {
-        const newQty =
-          action === "increase" ? item.qtd_numerica + 1 : item.qtd_numerica - 1;
-        return { ...item, qtd_numerica: Math.max(1, newQty) };
-      }
-      return item;
-    });
-    await syncCart(newItems);
-  };
-
-  // DELETE (Remover item)
-  const removeItem = async (nome: string) => {
-    try {
-      const newItems = cartItems.filter((item) => item.nome !== nome);
-
-      await syncCart(newItems);
-
-      Toast.show({
-        type: "success",
-        text1: "Produto removido com sucesso!",
-        text2: nome,
-        position: "bottom",
-        visibilityTime: 1200,
-      });
-    } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: "Erro ao remover",
-        text2: "Tente novamente.",
-        position: "bottom",
-      });
-    }
-  };
-
-  const cartCount = (cartItems || []).reduce(
-    (acc, item) => acc + item.qtd_numerica,
-    0,
-  );
 
   return (
     <CartContext.Provider
       value={{
-        cartItems: cartItems || [],
-        cartCount,
-        updateQuantity,
+        cart,
+        items,
+        loading,
+        refreshCart,
+        addItem,
         removeItem,
-        addToCart,
       }}
     >
       {children}
     </CartContext.Provider>
   );
-};
+}
 
-export const useCart = () => useContext(CartContext);
+export function useCart() {
+  return useContext(CartContext);
+}
