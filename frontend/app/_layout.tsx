@@ -5,13 +5,13 @@ import {
   ThemeProvider,
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
-import { Stack } from "expo-router";
+import { Stack, useRouter, useSegments } from "expo-router";
+import { supabase } from "@/services/auth";
 import * as SplashScreen from "expo-splash-screen";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import "react-native-reanimated";
-// 1. REMOVA A IMPORTAÇÃO DO SAFEAREAVIEW DAQUI
 import { ErrorToast, SuccessToast } from "@/components/CustomToast";
-import { View } from "react-native";
+import { View, ActivityIndicator } from "react-native";
 import Toast from "react-native-toast-message";
 
 import { useColorScheme } from "@/components/useColorScheme";
@@ -55,11 +55,44 @@ export default function RootLayout() {
 
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
+  const router = useRouter();
+  const segments = useSegments();
+  const [isAuthReady, setIsAuthReady] = useState(false);
+
+  useEffect(() => {
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        const currentSegment = segments[0];
+
+        const isPublicRoute = currentSegment === "auth";
+
+        if (!session && !isPublicRoute) {
+          // AJUSTE AQUI: Se sua pasta se chama auth, a rota é "/auth"
+          router.replace("/auth");
+        } else if (session && isPublicRoute) {
+          router.replace("/(tabs)/home");
+        }
+
+        setIsAuthReady(true);
+      },
+    );
+
+    return () => {
+      authListener.subscription.unsubscribe();
+    };
+  }, [segments]);
+
+  if (!isAuthReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+        <ActivityIndicator size="large" color="#E31837" />
+      </View>
+    );
+  }
 
   return (
     <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
       <CartProvider>
-        {/* 2. SUBSTITUA O SAFEAREAVIEW POR UMA VIEW COMUM */}
         <View style={{ flex: 1, backgroundColor: "#FFF" }}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -69,8 +102,10 @@ function RootLayoutNav() {
               name="product/[id]"
               options={{ headerShown: false }}
             />
+            {/* Certifique-se de que a tela de login esteja no seu Stack se não for automática */}
+            <Stack.Screen name="login" options={{ headerShown: false }} />
           </Stack>
-          <Toast config={toastConfig} />
+          <Toast config={toastConfig} position="bottom" bottomOffset={100} />
         </View>
       </CartProvider>
     </ThemeProvider>

@@ -1,8 +1,12 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "@/services/auth";
 const API_URL = `https://${process.env.EXPO_PUBLIC_API_URL}`;
 
 export async function getToken() {
-  return AsyncStorage.getItem("@hema_token");
+  // Pede a sessão atual diretamente pro gerente oficial (Supabase)
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  // Retorna o token se existir, ou null
+  return session?.access_token || null;
 }
 
 export async function addCartItem(data: {
@@ -75,8 +79,6 @@ export async function removeCartItem(id: string) {
       "Content-Type": "application/json",
     },
   });
-
-  console.log(res);
 
   if (!res.ok) {
     throw new Error("Erro ao remover item");

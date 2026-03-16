@@ -11,7 +11,6 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { styles } from "../../styles/profile.styles";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getProfile } from "../../services/profile";
 import { logout } from "../../services/auth";
 import { router } from "expo-router";
 

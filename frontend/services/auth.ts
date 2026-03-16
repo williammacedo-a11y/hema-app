@@ -1,12 +1,21 @@
+import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
+// 1. A MÁGICA ACONTECE AQUI:
+export const supabase = createClient(
   process.env.EXPO_PUBLIC_SUPABASE_URL!,
   process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
+  {
+    auth: {
+      storage: AsyncStorage,
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
+  },
 );
 
-// Função auxiliar para salvar no "cache"
 const saveUserCache = async (name: string, email: string) => {
   try {
     await AsyncStorage.setItem("@hema_user_name", name);
@@ -24,12 +33,6 @@ export async function signup(email: string, password: string, name: string) {
   });
 
   if (error) throw error;
-
-  const accessToken = data.session?.access_token;
-
-  if (accessToken) {
-    await AsyncStorage.setItem("@hema_token", accessToken);
-  }
 
   if (data.user?.user_metadata?.name) {
     await saveUserCache(
@@ -49,19 +52,7 @@ export async function login(email: string, password: string) {
 
   if (error) throw error;
 
-  const accessToken = data.session?.access_token;
-  const refreshToken = data.session?.refresh_token;
-
-  if (accessToken) {
-    await AsyncStorage.setItem("@hema_token", accessToken);
-  }
-
-  if (refreshToken) {
-    await AsyncStorage.setItem("@hema_refresh", refreshToken);
-  }
-
   const userName = data.user?.user_metadata?.name;
-
   if (userName) {
     await saveUserCache(userName, data.user.user_metadata.email);
   }
@@ -72,8 +63,6 @@ export async function login(email: string, password: string) {
 export async function logout() {
   await supabase.auth.signOut();
 
-  await AsyncStorage.removeItem("@hema_token");
-  await AsyncStorage.removeItem("@hema_refresh");
   await AsyncStorage.removeItem("@hema_user_name");
   await AsyncStorage.removeItem("@hema_user_email");
 }

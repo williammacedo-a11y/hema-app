@@ -5,49 +5,47 @@ const { width } = Dimensions.get("window");
 export const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#FFF",
+    backgroundColor: "#FAFAFA", // Fundo levemente mais cinza para destacar os cards brancos
   },
   container: {
     flex: 1,
     paddingHorizontal: 16,
   },
   header: {
-    paddingVertical: 24, // Aumentado para dar mais respiro
-    marginBottom: 10,
+    paddingVertical: 20,
+    marginBottom: 8,
   },
   headerTitle: {
-    fontSize: 26, // Ligeiramente maior
+    fontSize: 28, // Um pouco maior
     fontWeight: "800",
-    color: "#1A1A1A",
+    color: "#111",
     letterSpacing: -0.5,
   },
   // --- LISTA DE ITENS ---
-  cartItem: {
-    flexDirection: "row",
-    padding: 10,
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    marginBottom: 12,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    borderWidth: 1,
-    borderColor: "#F5F5F5",
-    alignItems: "center",
-  },
   listContent: {
     paddingBottom: 40,
-    paddingHorizontal: 2,
   },
-  imageContainer: {
-    width: 70, // Tamanho reduzido
-    height: 70,
-    backgroundColor: "#F9F9F9",
-    borderRadius: 8,
+  cartItem: {
+    flexDirection: "row",
+    padding: 14, // Mais respiro interno
+    backgroundColor: "#FFF",
+    borderRadius: 16, // Mais arredondado
+    marginBottom: 16,
+    // Sombra mais suave e elegante
+    elevation: 3,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
     borderWidth: 1,
     borderColor: "#F0F0F0",
+    alignItems: "center",
+  },
+  imageContainer: {
+    width: 76, // Ligeiramente maior
+    height: 76,
+    backgroundColor: "#F9F9F9",
+    borderRadius: 12, // Acompanha o shape do card
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
@@ -59,8 +57,8 @@ export const styles = StyleSheet.create({
   },
   itemDetails: {
     flex: 1,
-    marginLeft: 12,
-    height: 70, // Alinhado com a altura da imagem
+    marginLeft: 14,
+    height: 76,
     justifyContent: "space-between",
   },
   itemHeader: {
@@ -69,109 +67,168 @@ export const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   itemName: {
-    fontSize: 14,
-    color: "#333",
-    fontWeight: "600",
+    fontSize: 15, // Mais legível
+    color: "#222",
+    fontWeight: "700",
+    marginRight: 8, // Evita encostar no preço
   },
   unitPriceText: {
-    fontSize: 11,
+    fontSize: 12,
     color: "#888",
     marginTop: 2,
+    fontWeight: "500",
   },
   itemTotalPrice: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#1A1A1A",
+    fontSize: 16, // Maior destaque para o valor que o usuário vai pagar
+    fontWeight: "800",
+    color: "#E31837",
   },
   itemFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
   },
+
+  // --- CONTROLE DE UNIDADE (+ / -) ---
   quantityContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F5F5F5",
+    backgroundColor: "#F8F8F8",
     borderRadius: 20,
-    padding: 2,
+    padding: 3, // Mais espaço em volta dos botões
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
   },
   qtyButton: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 28, // Maior área de toque
+    height: 28,
+    borderRadius: 14,
     backgroundColor: "#FFF",
     alignItems: "center",
     justifyContent: "center",
-    elevation: 1,
+    // Sombra sutil para dar sensação de botão "clicável"
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
   },
   qtyLabelContainer: {
-    minWidth: 40, // Espaço para não "empurrar" os botões quando o número cresce
+    // Espaço para alinhar perfeitamente entre os botões de unidade
+    minWidth: 32,
     alignItems: "center",
-    paddingHorizontal: 8,
+    justifyContent: "center",
   },
   qtyText: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "700",
     color: "#1A1A1A",
   },
+
+  // --- CONTROLE DE PESO (Input + ✏️) ---
+  weightEditContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F8F8F8", // Mesma cor do container de unidade
+    borderRadius: 20, // Mesmo border radius para manter o padrão
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: "#EEEEEE",
+    height: 36, // Altura fixa igual ao do container de unidade (28 + 3 + 3 + bordas)
+  },
+  weightInput: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    minWidth: 35,
+    textAlign: "right",
+    padding: 0,
+    height: 28, // Para não esticar o container
+  },
+  weightUnitText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#888",
+    marginLeft: 2,
+    marginRight: 10,
+    marginTop: 1, // Alinha visualmente com a base do número
+  },
+  editWeightButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    justifyContent: "center",
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 2,
+  },
+
+  // --- BOTÃO REMOVER ---
   removeButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
+    padding: 6, // Maior área de toque sem afetar visual
   },
   removeButtonText: {
-    fontSize: 11,
-    color: "#999",
-    fontWeight: "500",
+    fontSize: 12,
+    color: "#A0A0A0", // Cinza um pouco mais leve para não brigar com a ação principal
+    fontWeight: "600",
   },
+
   // --- RESUMO E FINALIZAÇÃO ---
   footerContainer: {
-    padding: 20,
-    paddingBottom: 30, // Espaço extra para o final da tela
-    borderTopLeftRadius: 24, // Arredondar o container de checkout
-    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 34,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     backgroundColor: "#FFF",
-    // Sombra para o footer parecer "subir" sobre a lista
-    elevation: 20,
+    elevation: 24,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: -10 },
-    shadowOpacity: 0.05,
-    shadowRadius: 15,
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
   },
   subtotalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 24,
   },
   subtotalLabel: {
     fontSize: 16,
     color: "#666",
-    fontWeight: "500",
+    fontWeight: "600",
   },
   subtotalValue: {
-    fontSize: 22,
+    fontSize: 24, // Maior destaque final
     fontWeight: "900",
     color: "#E31837",
+    letterSpacing: -0.5,
   },
   checkoutButton: {
     backgroundColor: "#E31837",
-    paddingVertical: 16,
-    borderRadius: 30, // De 2 para 30 (Botão Pílula)
+    paddingVertical: 18, // Botão um pouco mais gordinho
+    borderRadius: 30,
     alignItems: "center",
     justifyContent: "center",
     elevation: 4,
     shadowColor: "#E31837",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
   checkoutButtonText: {
     color: "#FFF",
     fontSize: 16,
     fontWeight: "800",
     textTransform: "uppercase",
-    letterSpacing: 1,
+    letterSpacing: 1.2,
   },
   emptyCartText: {
     textAlign: "center",

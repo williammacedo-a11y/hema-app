@@ -16,6 +16,7 @@ import { Product } from "@/types/product";
 import { getProductById, getSimilarProducts } from "@/services/products";
 import { styles } from "../../styles/product.styles";
 import { formatProductPrice } from "@/util/formatProductPrice";
+import Toast from "react-native-toast-message";
 
 export default function ProductDetailsScreen() {
   const router = useRouter();
@@ -79,13 +80,31 @@ export default function ProductDetailsScreen() {
   }
 
   const handleAddToCart = async () => {
-    await addItem({
-      product_id: product.id,
-      quantity: 1,
-      price: product.price,
-    });
+    if (!product) return;
 
-    router.push("/cart");
+    try {
+      const payload = {
+        product_id: product.id,
+        price: product.type === "unit" ? product.price : product.price_per_kg,
+        ...(product.type === "unit" ? { quantity: 1 } : { weight: 50 }),
+      };
+
+      Toast.show({
+        type: "success",
+        text1: "Produto adicionado ao carrinho!",
+        text2: `${product.name} foi salvo.`,
+      });
+
+      await addItem(payload);
+
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Erro ao adicionar",
+        text2: "Tente novamente em instantes.",
+      });
+      console.error("Erro ao adicionar ao carrinho:", error);
+    }
   };
 
   return (

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import * as cartService from "@/services/cart";
+import Toast from "react-native-toast-message";
 
 type Cart = any;
 type CartItem = any;
@@ -83,23 +84,41 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     );
 
     try {
+      setLoading(true);
       await cartService.updateCartItemService(id, data);
+
+      const res = await cartService.getCartService();
+      if (res) {
+        setCart(res.cart);
+        setItems(res.items || []);
+      }
     } catch (err) {
       setItems(previousItems);
-      console.error("Erro ao atualizar item, revertendo estado local", err);
+      console.error("Erro ao atualizar item", err);
+    } finally {
+      setLoading(false);
     }
   }
 
   async function removeItem(id: string) {
     const previousItems = [...items];
-
     setItems((currentItems) => currentItems.filter((item) => item.id !== id));
 
     try {
+      setLoading(true);
       await cartService.removeCartItemService(id);
+
+      Toast.show({ type: "success", text1: "Removido com sucesso!" });
+      const res = await cartService.getCartService();
+      if (res) {
+        setCart(res.cart);
+        setItems(res.items || []);
+      }
     } catch (err) {
       setItems(previousItems);
       console.error("Erro ao remover item", err);
+    } finally {
+      setLoading(false);
     }
   }
 

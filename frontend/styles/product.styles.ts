@@ -22,10 +22,11 @@ export const styles = StyleSheet.create({
   },
   imageContainer: {
     width: width,
-    height: width, // Imagem quadrada ocupando a tela toda
-    backgroundColor: "#F8F8F8",
+    height: width,
+    backgroundColor: "#fff",
     justifyContent: "center",
     alignItems: "center",
+    paddingTop: 70,
   },
   productImage: {
     width: "100%",

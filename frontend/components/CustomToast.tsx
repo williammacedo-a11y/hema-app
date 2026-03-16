@@ -13,7 +13,7 @@ export function SuccessToast({ text1, text2 }: Props) {
       style={{
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#E9F9F1", // verde menta bem claro
+        backgroundColor: "#E9F9F1",
         padding: 16,
         borderRadius: 18,
         marginHorizontal: 20,
@@ -29,7 +29,7 @@ export function SuccessToast({ text1, text2 }: Props) {
           width: 44,
           height: 44,
           borderRadius: 22,
-          backgroundColor: "#22C55E", // verde forte
+          backgroundColor: "#22C55E",
           alignItems: "center",
           justifyContent: "center",
           marginRight: 14,
@@ -73,7 +73,7 @@ export function ErrorToast({ text1, text2 }: Props) {
       style={{
         flexDirection: "row",
         alignItems: "center",
-        backgroundColor: "#FDECEC", // vermelho claro
+        backgroundColor: "#FDECEC", 
         padding: 16,
         borderRadius: 18,
         marginHorizontal: 20,
@@ -89,7 +89,7 @@ export function ErrorToast({ text1, text2 }: Props) {
           width: 44,
           height: 44,
           borderRadius: 22,
-          backgroundColor: "#EF4444", // vermelho forte
+          backgroundColor: "#EF4444",
           alignItems: "center",
           justifyContent: "center",
           marginRight: 14,

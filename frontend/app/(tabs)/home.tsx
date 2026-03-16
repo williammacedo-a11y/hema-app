@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { SuccessToast, ErrorToast } from "@/components/CustomToast";
+import Toast from "react-native-toast-message";
 
 import { styles } from "@/styles/home.styles";
 import { useHomeData } from "@/hooks/useHomeData";
@@ -32,11 +32,17 @@ export default function HomeScreen() {
         ...(product.type === "unit" ? { quantity: 1 } : { weight: 50 }),
       };
 
+      Toast.show({
+        type: "success",
+        text1: "Produto adicionado ao carrinho!",
+        text2: `${product.name} foi salvo.`,
+      });
       await addItem(payload);
-
-      SuccessToast({ text1: "Produto adicionado ao carrinho!" });
     } catch (error) {
-      ErrorToast({ text1: "Não foi possível adicionar o item." });
+      Toast.show({
+        type: "error",
+        text1: "Não foi possível adicionar o item.",
+      });
       console.error("Erro ao adicionar ao carrinho:", error);
     }
   };

@@ -11,9 +11,6 @@ const BRAND_COLORS = {
   border: "#F0F0F0",
 };
 
-/**
- * Ícone com o contador (Badge) que atualiza instantaneamente
- */
 function CartIconWithBadge({ color }: { color: string }) {
   const { cartCount } = useCart();
 
@@ -111,6 +108,14 @@ export default function TabLayout() {
         options={{
           title: "Perfil",
           tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
+        }}
+      />
+
+      <Tabs.Screen
+        name="category/[id]"
+        options={{
+          href: null,
+          headerShown: false,
         }}
       />
     </Tabs>

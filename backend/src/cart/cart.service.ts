@@ -8,7 +8,6 @@ export class CartService {
   async addItem(userId: string, dto: AddCartItemDto) {
     const { product_id, quantity, weight } = dto;
 
-    // 1️⃣ buscar produto
     const { data: product, error: productError } = await supabase
       .from('products')
       .select('*')
@@ -19,7 +18,6 @@ export class CartService {
       throw new Error('Produto não encontrado');
     }
 
-    // 2️⃣ validar tipo
     if (product.type === 'unit' && !quantity) {
       throw new Error('Quantidade é obrigatória para produtos unitários');
     }
@@ -28,14 +26,13 @@ export class CartService {
       throw new Error('Peso é obrigatório para produtos por peso');
     }
 
-    // 3️⃣ buscar carrinho
+    // 3️⃣ buscar ou criar carrinho
     let { data: cart } = await supabase
       .from('carts')
       .select('*')
       .eq('user_id', userId)
       .maybeSingle();
 
-    // 4️⃣ criar carrinho se não existir
     if (!cart) {
       const { data: newCart, error: cartError } = await supabase
         .from('carts')
@@ -46,18 +43,11 @@ export class CartService {
         .select()
         .maybeSingle();
 
-      if (cartError) {
-        console.error('Erro criando carrinho:', cartError);
-        throw new Error('Falha ao criar carrinho');
-      }
+      if (cartError) throw new Error('Falha ao criar carrinho');
       cart = newCart;
     }
 
-    if (!cart) {
-      throw new Error('Carrinho não encontrado');
-    }
-
-    // 5️⃣ verificar se item já existe
+    // 4️⃣ verificar se item já existe
     const { data: existingItem } = await supabase
       .from('cart_items')
       .select('*')
@@ -65,76 +55,54 @@ export class CartService {
       .eq('product_id', product_id)
       .maybeSingle();
 
-    let price = 0;
-
-    if (product.type === 'unit') {
-      price = product.price;
-    } else {
-      price = product.price_per_kg * product.weight;
-    }
-
-    // 6️⃣ atualizar item existente
     if (existingItem) {
       const newQuantity =
         product.type === 'unit'
-          ? existingItem.quantity + quantity
-          : existingItem.quantity;
+          ? existingItem.quantity + (quantity || 0)
+          : null;
 
       const newWeight =
-        product.type === 'weight'
-          ? existingItem.weight + weight
-          : existingItem.weight;
+        product.type === 'weight' ? existingItem.weight + (weight || 0) : null;
+
+      let updatedPrice = 0;
+      if (product.type === 'unit') {
+        updatedPrice = product.price;
+      } else {
+        // Correção do erro aqui (usando o newWeight que já está seguro)
+        updatedPrice = (product.price_per_kg / 1000) * (newWeight || 0);
+      }
 
       await supabase
         .from('cart_items')
         .update({
           quantity: newQuantity,
           weight: newWeight,
-          price,
+          price: updatedPrice,
         })
         .eq('id', existingItem.id);
-    }
+    } else {
+      let initialPrice = 0;
+      if (product.type === 'unit') {
+        initialPrice = product.price;
+      } else {
+        // Correção do erro aqui: adicionando o fallback (weight || 0)
+        initialPrice = (product.price_per_kg / 1000) * (weight || 0);
+      }
 
-    // 7️⃣ inserir novo item
-    else {
       await supabase.from('cart_items').insert({
         cart_id: cart.id,
         product_id,
         quantity: quantity || null,
         weight: weight || null,
-        price,
+        price: initialPrice,
       });
     }
 
-    // 8️⃣ recalcular total
-    const { data: items } = await supabase
-      .from('cart_items')
-      .select('*')
-      .eq('cart_id', cart.id);
-
-    const itemsSafe = items ?? [];
-
-    const total = itemsSafe.reduce((acc, item) => {
-      if (item.quantity) {
-        return acc + item.price * item.quantity;
-      }
-
-      if (item.weight) {
-        return acc + item.price;
-      }
-
-      return acc;
-    }, 0);
-
-    await supabase
-      .from('carts')
-      .update({ total_price: total })
-      .eq('id', cart.id);
+    await this.recalculateCart(cart.id);
 
     return {
       success: true,
       cart_id: cart.id,
-      total_price: total,
     };
   }
 
@@ -195,13 +163,11 @@ export class CartService {
   async updateItem(userId: string, itemId: string, dto: UpdateCartItemDto) {
     const { data: item } = await supabase
       .from('cart_items')
-      .select('*')
+      .select('*, product:products(*)') // Precisamos do produto para recalcular o preço
       .eq('id', itemId)
       .maybeSingle();
 
-    if (!item) {
-      throw new Error('Item não encontrado');
-    }
+    if (!item) throw new Error('Item não encontrado');
 
     const { data: cart } = await supabase
       .from('carts')
@@ -213,7 +179,22 @@ export class CartService {
       throw new Error('Item não pertence ao usuário');
     }
 
-    await supabase.from('cart_items').update(dto).eq('id', itemId);
+    let newPrice = item.price;
+    const product = item.product;
+
+    if (dto.quantity !== undefined && product.type === 'unit') {
+      newPrice = product.price;
+    } else if (dto.weight !== undefined && product.type === 'weight') {
+      newPrice = (product.price_per_kg / 1000) * (dto.weight || 0);
+    }
+
+    await supabase
+      .from('cart_items')
+      .update({
+        ...dto,
+        price: newPrice,
+      })
+      .eq('id', itemId);
 
     await this.recalculateCart(item.cart_id);
 
@@ -251,15 +232,19 @@ export class CartService {
   async recalculateCart(cartId: string) {
     const { data: items } = await supabase
       .from('cart_items')
-      .select('*')
+      .select('*, product:products(type)') // Precisamos saber o tipo
       .eq('cart_id', cartId);
 
     const total = (items ?? []).reduce((acc, item) => {
-      if (item.quantity) {
+      // 🔴 CORREÇÃO 4: Lógica de Soma
+      if (item.product.type === 'unit' && item.quantity) {
+        // Se for unidade, salvamos o preço base. Então Total = Base * Qtd
         return acc + item.price * item.quantity;
       }
 
-      if (item.weight) {
+      if (item.product.type === 'weight' && item.weight) {
+        // Se for peso, o 'item.price' já é o valor FINAL calculado ((kg/1000) * peso)
+        // Então não multiplicamos por nada, só somamos.
         return acc + item.price;
       }
 

@@ -10,14 +10,17 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message"; 
 
 import { getProductsByCategory } from "@/services/products";
 import { ProductCard } from "@/components/ProductCard";
 import { Product } from "@/types/product";
 import { styles } from "@/styles/category.styles";
+import { useCart } from "@/context/CartContext"; 
 
 export default function CategoryScreen() {
   const router = useRouter();
+  const { addItem } = useCart();
   const [loading, setLoading] = useState(true);
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const [products, setProducts] = useState<Product[]>([]);
@@ -32,6 +35,30 @@ export default function CategoryScreen() {
     }
     loadProducts();
   }, [id]);
+
+  const handleAddToCart = async (product: Product) => {
+    try {
+      const payload = {
+        product_id: product.id,
+        price: product.type === "unit" ? product.price : product.price_per_kg,
+        ...(product.type === "unit" ? { quantity: 1 } : { weight: 50 }),
+      };
+
+      Toast.show({
+        type: "success",
+        text1: "Adicionado ao carrinho!",
+        text2: `${product.name} foi adicionado com sucesso.`,
+      });
+      await addItem(payload);
+    } catch (error) {
+      Toast.show({
+        type: "error",
+        text1: "Erro ao adicionar",
+        text2: "Não foi possível adicionar este item.",
+      });
+      console.error("Erro na categoria:", error);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safeArea} edges={["top"]}>
@@ -51,7 +78,6 @@ export default function CategoryScreen() {
 
       {loading ? (
         <View style={styles.loadingContainer}>
-          {/* O vermelho vibrante dá um bom destaque na tela de carregamento */}
           <ActivityIndicator size="large" color="#E31837" />
         </View>
       ) : (
@@ -68,7 +94,7 @@ export default function CategoryScreen() {
               <ProductCard
                 product={item}
                 onPress={() => router.push(`/product/${item.id}`)}
-                onAdd={() => console.log("Adicionado", item.name)}
+                onAdd={() => handleAddToCart(item)}
                 isGrid={true}
               />
             </View>
