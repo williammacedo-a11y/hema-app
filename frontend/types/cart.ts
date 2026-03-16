@@ -31,6 +31,7 @@ export type CartItemWithProduct = {
     image_url: string | null;
     type: "unit" | "weight";
     price: number | null;
+    price_per_kg: number | null;
   };
 };
 

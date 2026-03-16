@@ -10,16 +10,16 @@ export async function addCartItemService(data: {
 }
 
 export async function getCartService() {
-  const { response } = await api.getCart();
-  return response;
+  const data = await api.getCart();
+  return data;
 }
 
 export async function updateCartItemService(id: string, data: any) {
-  const { response } = await api.updateCartItem(id, data);
+  const response = await api.updateCartItem(id, data);
   return response;
 }
 
 export async function removeCartItemService(id: string) {
-  const { response } = await api.removeCartItem(id);
-  return response;
+  const data = await api.removeCartItem(id);
+  return data;
 }

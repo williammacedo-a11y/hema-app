@@ -80,15 +80,11 @@ export default function ProductDetailsScreen() {
 
   const handleAddToCart = async () => {
     await addItem({
-      nome: product.name,
-      tipo: "UNITARIO",
-      total: product.price,
-      qtd_desc: "1 un",
-      qtd_numerica: 1,
-      image_url: product.image_url,
+      product_id: product.id,
+      quantity: 1,
+      price: product.price,
     });
 
-    console.log(typeof product.price, product.price);
     router.push("/cart");
   };
 

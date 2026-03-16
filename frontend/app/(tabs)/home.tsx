@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   ScrollView,
@@ -10,18 +10,35 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
+import { SuccessToast, ErrorToast } from "@/components/CustomToast";
 
 import { styles } from "@/styles/home.styles";
 import { useHomeData } from "@/hooks/useHomeData";
 import { HomeHeader } from "@/components/HomeHeader";
 import { ProductCard } from "@/components/ProductCard";
+import { useCart } from "@/context/CartContext";
+import { Product } from "@/types/product";
 
 export default function HomeScreen() {
   const router = useRouter();
   const { catalog, loading, refreshing, onRefresh, userName } = useHomeData();
+  const { addItem } = useCart();
 
-  const handleAddToCart = (product: any) => {
-    console.log("Adicionar ao carrinho:", product.name);
+  const handleAddToCart = async (product: Product) => {
+    try {
+      const payload = {
+        product_id: product.id,
+        price: product.type === "unit" ? product.price : product.price_per_kg,
+        ...(product.type === "unit" ? { quantity: 1 } : { weight: 50 }),
+      };
+
+      await addItem(payload);
+
+      SuccessToast({ text1: "Produto adicionado ao carrinho!" });
+    } catch (error) {
+      ErrorToast({ text1: "Não foi possível adicionar o item." });
+      console.error("Erro ao adicionar ao carrinho:", error);
+    }
   };
 
   return (

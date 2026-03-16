@@ -22,98 +22,107 @@ export const styles = StyleSheet.create({
     letterSpacing: -0.5,
   },
   // --- LISTA DE ITENS ---
-  listContent: {
-    paddingBottom: 30,
-  },
   cartItem: {
     flexDirection: "row",
-    padding: 12, // Adicionado padding interno
+    padding: 10,
     backgroundColor: "#FFF",
-    borderRadius: 16, // Item agora é um card arredondado
-    marginBottom: 16,
-    // Sombra leve para destacar os itens do fundo
+    borderRadius: 12,
+    marginBottom: 12,
     elevation: 2,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
-    shadowRadius: 10,
+    shadowRadius: 5,
     borderWidth: 1,
     borderColor: "#F5F5F5",
+    alignItems: "center",
   },
-  imagePlaceholder: {
-    width: 90,
-    height: 90,
+  listContent: {
+    paddingBottom: 40,
+    paddingHorizontal: 2,
+  },
+  imageContainer: {
+    width: 70, // Tamanho reduzido
+    height: 70,
     backgroundColor: "#F9F9F9",
-    borderRadius: 12, // De 2 para 12
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: "#F0F0F0",
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  image: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
   },
   itemDetails: {
     flex: 1,
-    marginLeft: 16,
+    marginLeft: 12,
+    height: 70, // Alinhado com a altura da imagem
     justifyContent: "space-between",
   },
+  itemHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
   itemName: {
-    fontSize: 15,
+    fontSize: 14,
     color: "#333",
     fontWeight: "600",
-    lineHeight: 20,
   },
-  itemPrice: {
-    fontSize: 17,
-    fontWeight: "800",
+  unitPriceText: {
+    fontSize: 11,
+    color: "#888",
+    marginTop: 2,
+  },
+  itemTotalPrice: {
+    fontSize: 14,
+    fontWeight: "700",
     color: "#1A1A1A",
   },
   itemFooter: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginTop: 10,
   },
-  // --- CONTROLE DE QUANTIDADE ---
   quantityContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F5F5F5", // Fundo cinza claro para o controle todo
-    borderRadius: 25, // Formato de pílula
+    backgroundColor: "#F5F5F5",
+    borderRadius: 20,
     padding: 2,
-    borderWidth: 0, // Removida a borda dura
   },
   qtyButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     backgroundColor: "#FFF",
     alignItems: "center",
     justifyContent: "center",
-    // Pequena sombra no botão de + e -
     elevation: 1,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 1,
   },
-  qtyButtonText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#E31837", // Usei o vermelho da marca para os controles
+  qtyLabelContainer: {
+    minWidth: 40, // Espaço para não "empurrar" os botões quando o número cresce
+    alignItems: "center",
+    paddingHorizontal: 8,
   },
   qtyText: {
-    paddingHorizontal: 15,
-    fontSize: 14,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "700",
     color: "#1A1A1A",
   },
   removeButton: {
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
   },
   removeButtonText: {
-    fontSize: 12,
-    color: "#999", // Cinza mais suave
+    fontSize: 11,
+    color: "#999",
     fontWeight: "500",
-    // Removido o underline para um look mais clean,
-    // mas pode manter se preferir
   },
   // --- RESUMO E FINALIZAÇÃO ---
   footerContainer: {

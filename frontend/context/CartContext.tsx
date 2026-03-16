@@ -8,10 +8,18 @@ type CartContextType = {
   cart: Cart | null;
   items: CartItem[];
   loading: boolean;
+  cartCount: number;
   refreshCart: () => Promise<void>;
   addItem: (data: any) => Promise<void>;
   updateItem: (id: string, data: any) => Promise<void>;
   removeItem: (id: string) => Promise<void>;
+};
+
+type AddCartItemDTO = {
+  product_id: string;
+  quantity?: number;
+  weight?: number;
+  price: number;
 };
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -21,14 +29,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const cartCount = items.length;
+
   async function refreshCart() {
     try {
       setLoading(true);
+      const data = await cartService.getCartService();
 
-      const response = await cartService.getCartService();
-
-      setCart(response.cart);
-      setItems(response.items ?? []);
+      if (data) {
+        setCart(data.cart || {});
+        setItems(data.items || []);
+      }
     } catch (err) {
       console.error("Erro ao buscar carrinho", err);
     } finally {
@@ -36,29 +47,58 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  async function addItem(data: any) {
+  async function addItem(data: AddCartItemDTO) {
+    const previousItems = [...items];
+
+    const tempItem = {
+      id: `temp-${Date.now()}`,
+      product_id: data.product_id,
+      quantity: data.quantity || 0,
+      weight: data.weight || 0,
+      product: {},
+    };
+
+    setItems((prev) => [...prev, tempItem]);
+
     try {
       await cartService.addCartItemService(data);
       await refreshCart();
     } catch (err) {
+      setItems(previousItems);
       console.error("Erro ao adicionar item", err);
+      throw err;
     }
   }
 
-  async function updateItem(id: string, data: any) {
+  async function updateItem(
+    id: string,
+    data: { quantity?: number; weight?: number },
+  ) {
+    const previousItems = [...items];
+
+    setItems((currentItems) =>
+      currentItems.map((item) =>
+        item.id === id ? { ...item, ...data } : item,
+      ),
+    );
+
     try {
       await cartService.updateCartItemService(id, data);
-      await refreshCart();
     } catch (err) {
-      console.error("Erro ao atualizar item", err);
+      setItems(previousItems);
+      console.error("Erro ao atualizar item, revertendo estado local", err);
     }
   }
 
   async function removeItem(id: string) {
+    const previousItems = [...items];
+
+    setItems((currentItems) => currentItems.filter((item) => item.id !== id));
+
     try {
       await cartService.removeCartItemService(id);
-      await refreshCart();
     } catch (err) {
+      setItems(previousItems);
       console.error("Erro ao remover item", err);
     }
   }
@@ -73,6 +113,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         cart,
         items,
         loading,
+        cartCount,
         refreshCart,
         addItem,
         updateItem,

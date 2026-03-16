@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-const API_URL = process.env.EXPO_PUBLIC_API_URL;
+const API_URL = `https://${process.env.EXPO_PUBLIC_API_URL}`;
 
 export async function getToken() {
   return AsyncStorage.getItem("@hema_token");
@@ -32,16 +32,18 @@ export async function getCart() {
   const token = await getToken();
 
   const res = await fetch(`${API_URL}/cart`, {
+    method: "GET",
     headers: {
       Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
   });
 
   if (!res.ok) {
-    throw new Error("Erro ao buscar carrinho");
+    throw new Error(res.toString());
   }
 
-  return res.json();
+  return await res.json();
 }
 
 export async function updateCartItem(id: string, data: any) {
@@ -70,8 +72,11 @@ export async function removeCartItem(id: string) {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
     },
   });
+
+  console.log(res);
 
   if (!res.ok) {
     throw new Error("Erro ao remover item");
