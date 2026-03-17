@@ -1,34 +1,57 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 import { AddressesService } from './addresses.service';
-import { CreateAddressDto } from './dto/create-address.dto';
-import { UpdateAddressDto } from './dto/update-address.dto';
+import type { CreateAddressDTO } from './dto/create-address.dto';
+import type { UpdateAddressDTO } from './dto/update-address.dto';
+import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
 
 @Controller('addresses')
 export class AddressesController {
   constructor(private readonly addressesService: AddressesService) {}
 
   @Post()
-  create(@Body() createAddressDto: CreateAddressDto) {
-    return this.addressesService.create(createAddressDto);
+  @UseGuards(SupabaseAuthGuard)
+  create(@Req() req: Request, @Body() createAddressDto: CreateAddressDTO) {
+    const userId = req['user'].sub;
+    return this.addressesService.createAddress(userId, createAddressDto);
   }
 
   @Get()
-  findAll() {
-    return this.addressesService.findAll();
-  }
-
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.addressesService.findOne(+id);
+  @UseGuards(SupabaseAuthGuard)
+  findAll(@Req() req: Request) {
+    const userId = req['user'].sub;
+    return this.addressesService.getMyAddresses(userId);
   }
 
   @Patch(':id')
-  update(@Param('id') id: string, @Body() updateAddressDto: UpdateAddressDto) {
-    return this.addressesService.update(+id, updateAddressDto);
+  @UseGuards(SupabaseAuthGuard)
+  update(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() updateAddressDto: UpdateAddressDTO,
+  ) {
+    const userId = req['user'].sub;
+    return this.addressesService.updateAddress(userId, id, updateAddressDto);
+  }
+
+  @Get('cep/:cep')
+  getCep(@Param('cep') cep: string) {
+    return this.addressesService.getAddressByCep(cep);
   }
 
   @Delete(':id')
-  remove(@Param('id') id: string) {
-    return this.addressesService.remove(+id);
+  @UseGuards(SupabaseAuthGuard)
+  delete(@Req() req: Request, @Param('id') id: string) {
+    const userId = req['user'].sub;
+    return this.addressesService.deleteAddress(userId, id);
   }
 }

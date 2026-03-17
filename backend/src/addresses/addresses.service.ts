@@ -1,26 +1,89 @@
 import { Injectable } from '@nestjs/common';
-import { CreateAddressDto } from './dto/create-address.dto';
-import { UpdateAddressDto } from './dto/update-address.dto';
+import { CreateAddressDTO } from './dto/create-address.dto';
+import { UpdateAddressDTO } from './dto/update-address.dto';
+import { supabase } from 'src/lib/supabase';
 
 @Injectable()
 export class AddressesService {
-  create(createAddressDto: CreateAddressDto) {
-    return 'This action adds a new address';
+  async createAddress(userId: string, data: CreateAddressDTO) {
+    const { data: address, error } = await supabase
+      .from('addresses')
+      .insert({
+        ...data,
+        user_id: userId,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error('Erro ao criar endereço: ' + error.message);
+    }
+
+    return address;
   }
 
-  findAll() {
-    return `This action returns all addresses`;
+  async getMyAddresses(userId: string) {
+    const { data, error } = await supabase
+      .from('addresses')
+      .select('*')
+      .eq('user_id', userId)
+      .order('is_default', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      throw new Error('Erro ao buscar endereços: ' + error.message);
+    }
+
+    return data;
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} address`;
+  async updateAddress(
+    userId: string,
+    addressId: string,
+    data: UpdateAddressDTO,
+  ) {
+    const { data: address, error } = await supabase
+      .from('addresses')
+      .update(data)
+      .eq('id', addressId)
+      .eq('user_id', userId)
+      .select()
+      .single();
+
+    if (error) {
+      throw new Error('Erro ao atualizar endereço: ' + error.message);
+    }
+
+    return address;
   }
 
-  update(id: number, updateAddressDto: UpdateAddressDto) {
-    return `This action updates a #${id} address`;
+  async getAddressByCep(cep: string) {
+    const cleanCep = cep.replace(/\D/g, '');
+
+    const res = await fetch(`https://viacep.com.br/ws/${cleanCep}/json/`);
+    const data = await res.json();
+
+    if (data.erro) {
+      throw new Error('CEP inválido');
+    }
+
+    return {
+      street: data.logradouro,
+      neighborhood: data.bairro,
+      city: data.localidade,
+      state: data.uf,
+    };
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} address`;
+  async deleteAddress(userId: string, addressId: string) {
+    const { error } = await supabase
+      .from('addresses')
+      .delete()
+      .eq('id', addressId)
+      .eq('user_id', userId);
+
+    if (error) {
+      throw new Error('Erro ao deletar endereço: ' + error.message);
+    }
   }
 }
