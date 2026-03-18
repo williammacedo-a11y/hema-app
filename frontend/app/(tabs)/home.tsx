@@ -105,7 +105,12 @@ export default function HomeScreen() {
                       <ProductCard
                         key={product.id}
                         product={product}
-                        onPress={() => router.push(`/product/${product.id}`)}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/product/[id]",
+                            params: { id: product.id },
+                          })
+                        }
                         onAdd={() => handleAddToCart(product)}
                       />
                     ))}

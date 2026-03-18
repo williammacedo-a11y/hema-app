@@ -15,12 +15,12 @@ import { logout } from "../../services/auth";
 import { router } from "expo-router";
 
 const MENU_OPTIONS = [
-  { id: "1", title: "Meus Pedidos" },
-  { id: "2", title: "Endereço de Entrega" },
-  { id: "3", title: "Formas de Pagamento" },
-  { id: "4", title: "Meus Dados" },
-  { id: "5", title: "Configurações" },
-  { id: "6", title: "Ajuda e Suporte" },
+  { id: "1", title: "Meus Pedidos", route: "" },
+  { id: "2", title: "Endereço de Entrega", route: "/addresses" },
+  { id: "3", title: "Formas de Pagamento", route: "" },
+  { id: "4", title: "Meus Dados", route: "" },
+  { id: "5", title: "Configurações", route: "" },
+  { id: "6", title: "Ajuda e Suporte", route: "" },
 ];
 
 interface UserState {
@@ -94,6 +94,9 @@ export default function ProfileScreen() {
                 key={item.id}
                 style={styles.menuItem}
                 activeOpacity={0.6}
+                onPress={() => {
+                  if (item.route) router.push(item.route as any);
+                }}
               >
                 <View style={styles.menuItemContent}>
                   <Text style={styles.menuItemText}>{item.title}</Text>

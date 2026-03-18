@@ -27,7 +27,7 @@ function CartIconWithBadge({ color }: { color: string }) {
 
       {cartCount > 0 && (
         <View
-          pointerEvents="none" // Importante: o clique passa através da bolinha para a aba
+          pointerEvents="none"
           style={{
             position: "absolute",
             right: -10,
@@ -77,8 +77,7 @@ export default function TabLayout() {
           backgroundColor: BRAND_COLORS.background,
           borderTopWidth: 1,
           borderTopColor: BRAND_COLORS.border,
-          height: Platform.OS === "ios" ? 88 : 65,
-          paddingBottom: Platform.OS === "ios" ? 30 : 10,
+          minHeight: 65,
           paddingTop: 10,
         },
         tabBarLabelStyle: {
@@ -108,14 +107,6 @@ export default function TabLayout() {
         options={{
           title: "Perfil",
           tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
-        }}
-      />
-
-      <Tabs.Screen
-        name="category/[id]"
-        options={{
-          href: null,
-          headerShown: false,
         }}
       />
     </Tabs>

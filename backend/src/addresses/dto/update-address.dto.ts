@@ -7,4 +7,6 @@ export interface UpdateAddressDTO {
   city?: string;
   state?: string;
   zip_code?: string;
+  is_default?: boolean;
 }
+

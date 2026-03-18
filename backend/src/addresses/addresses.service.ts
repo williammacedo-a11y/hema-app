@@ -6,6 +6,13 @@ import { supabase } from 'src/lib/supabase';
 @Injectable()
 export class AddressesService {
   async createAddress(userId: string, data: CreateAddressDTO) {
+    if (data.is_default) {
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', userId);
+    }
+
     const { data: address, error } = await supabase
       .from('addresses')
       .insert({
@@ -42,6 +49,13 @@ export class AddressesService {
     addressId: string,
     data: UpdateAddressDTO,
   ) {
+    if (data.is_default) {
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', userId);
+    }
+
     const { data: address, error } = await supabase
       .from('addresses')
       .update(data)

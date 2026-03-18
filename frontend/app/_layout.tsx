@@ -13,6 +13,7 @@ import "react-native-reanimated";
 import { ErrorToast, SuccessToast } from "@/components/CustomToast";
 import { View, ActivityIndicator } from "react-native";
 import Toast from "react-native-toast-message";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { useColorScheme } from "@/components/useColorScheme";
 import { CartProvider } from "@/context/CartContext";
@@ -57,22 +58,20 @@ function RootLayoutNav() {
   const colorScheme = useColorScheme();
   const router = useRouter();
   const segments = useSegments();
+  const [session, setSession] = useState<any>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
+    // Busca a sessão inicial rápida
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setIsAuthReady(true);
+    });
+
+    // Ouve as mudanças de auth de forma global, apenas 1 vez
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        const currentSegment = segments[0];
-
-        const isPublicRoute = currentSegment === "auth";
-
-        if (!session && !isPublicRoute) {
-          // AJUSTE AQUI: Se sua pasta se chama auth, a rota é "/auth"
-          router.replace("/auth");
-        } else if (session && isPublicRoute) {
-          router.replace("/(tabs)/home");
-        }
-
+        setSession(session);
         setIsAuthReady(true);
       },
     );
@@ -80,7 +79,21 @@ function RootLayoutNav() {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, [segments]);
+  }, []);
+
+  // Efeito isolado para tratar a navegação protegida sempre que segmentos ou a sessão mudarem
+  useEffect(() => {
+    if (!isAuthReady) return;
+
+    const currentSegment = segments[0];
+    const isPublicRoute = currentSegment === "auth";
+
+    if (!session && !isPublicRoute) {
+      router.replace("/auth");
+    } else if (session && isPublicRoute) {
+      router.replace("/(tabs)/home");
+    }
+  }, [session, segments, isAuthReady]);
 
   if (!isAuthReady) {
     return (
@@ -91,23 +104,26 @@ function RootLayoutNav() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <CartProvider>
-        <View style={{ flex: 1, backgroundColor: "#FFF" }}>
-          <Stack>
-            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-            <Stack.Screen name="checkout" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="product/[id]"
-              options={{ headerShown: false }}
-            />
-            {/* Certifique-se de que a tela de login esteja no seu Stack se não for automática */}
-            <Stack.Screen name="login" options={{ headerShown: false }} />
-          </Stack>
-          <Toast config={toastConfig} position="bottom" bottomOffset={100} />
-        </View>
-      </CartProvider>
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <CartProvider>
+          <View style={{ flex: 1, backgroundColor: "#FFF" }}>
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+
+              <Stack.Screen name="checkout" options={{ headerShown: false }} />
+              <Stack.Screen name="addresses/index" options={{ headerShown: false }} />
+              <Stack.Screen name="addresses/[id]" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="product/[id]"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+            </Stack>
+            <Toast config={toastConfig} position="top" topOffset={60} />
+          </View>
+        </CartProvider>
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
