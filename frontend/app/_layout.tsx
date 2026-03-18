@@ -51,79 +51,104 @@ export default function RootLayout() {
     return null;
   }
 
-  return <RootLayoutNav />;
+  return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <RootLayoutNav />
+    </GestureHandlerRootView>
+  );
 }
 
-function RootLayoutNav() {
-  const colorScheme = useColorScheme();
+function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const segments = useSegments();
   const [session, setSession] = useState<any>(null);
   const [isAuthReady, setIsAuthReady] = useState(false);
 
   useEffect(() => {
-    // Busca a sessão inicial rápida
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setIsAuthReady(true);
     });
 
-    // Ouve as mudanças de auth de forma global, apenas 1 vez
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      (event, session) => {
+      (_, session) => {
         setSession(session);
         setIsAuthReady(true);
       },
     );
 
-    return () => {
-      authListener.subscription.unsubscribe();
-    };
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
-  // Efeito isolado para tratar a navegação protegida sempre que segmentos ou a sessão mudarem
   useEffect(() => {
     if (!isAuthReady) return;
 
-    const currentSegment = segments[0];
-    const isPublicRoute = currentSegment === "auth";
+    const path = segments.join("/");
+    const isAuthRoute = path.startsWith("auth");
 
-    if (!session && !isPublicRoute) {
+    if (!session && !isAuthRoute) {
       router.replace("/auth");
-    } else if (session && isPublicRoute) {
+    }
+
+    if (session && isAuthRoute) {
       router.replace("/(tabs)/home");
     }
-  }, [session, segments, isAuthReady]);
+  }, [session, isAuthReady]); // ❗ REMOVE segments daqui
 
   if (!isAuthReady) {
-    return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
-        <ActivityIndicator size="large" color="#E31837" />
-      </View>
-    );
+    return null; // ❗ NUNCA overlay
   }
 
+  return <>{children}</>;
+}
+
+function RootLayoutNav() {
+  const colorScheme = useColorScheme();
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-        <CartProvider>
-          <View style={{ flex: 1, backgroundColor: "#FFF" }}>
+    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+      <CartProvider>
+        <View style={{ flex: 1, backgroundColor: "#fff" }}>
+          <AuthGuard>
             <Stack>
               <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="auth" options={{ headerShown: false }} />
 
               <Stack.Screen name="checkout" options={{ headerShown: false }} />
-              <Stack.Screen name="addresses/index" options={{ headerShown: false }} />
-              <Stack.Screen name="addresses/[id]" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="addresses/index"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="addresses/[id]"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen
+                name="category/[id]"
+                options={{ headerShown: false }}
+              />
               <Stack.Screen
                 name="product/[id]"
                 options={{ headerShown: false }}
               />
               <Stack.Screen name="modal" options={{ presentation: "modal" }} />
+              <View
+                pointerEvents="none"
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  borderWidth: 2,
+                  borderColor: "red",
+                }}
+              />
             </Stack>
-            <Toast config={toastConfig} position="top" topOffset={60} />
-          </View>
-        </CartProvider>
-      </ThemeProvider>
-    </GestureHandlerRootView>
+          </AuthGuard>
+          <Toast config={toastConfig} position="top" topOffset={60} />
+        </View>
+      </CartProvider>
+    </ThemeProvider>
   );
 }

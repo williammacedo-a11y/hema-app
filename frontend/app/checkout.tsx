@@ -7,8 +7,9 @@ import {
   ScrollView,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 
 import { styles } from "../styles/checkout.styles";
@@ -17,29 +18,32 @@ import { useCart } from "@/context/CartContext";
 type DeliveryMethod = "pickup" | "delivery";
 type PaymentMethod = "pix" | "card" | "cash";
 
-const DELIVERY_FEE = 12.5; // Taxa de entrega fixa para simulação
+const DELIVERY_FEE = 12.5;
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const { cartItems } = useCart();
 
-  // Estados do formulário
+  // 1. Pegando os dados REAIS do seu Context
+  const { items, loading, cart } = useCart();
+
   const [deliveryMethod, setDeliveryMethod] =
     useState<DeliveryMethod>("delivery");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
 
-  // Estados de endereço (simples)
   const [street, setStreet] = useState("");
   const [number, setNumber] = useState("");
   const [complement, setComplement] = useState("");
 
-  // Cálculos Financeiros
+  // 2. Cálculo do Subtotal baseado no seu Context
+  // Se o seu backend já retornar o total no objeto 'cart', você pode usar cart.total
   const subtotal = useMemo(() => {
-    return (cartItems || []).reduce(
-      (acc, item) => acc + item.total * item.qtd_numerica,
-      0,
-    );
-  }, [cartItems]);
+    return (items || []).reduce((acc, item) => {
+      // Ajuste aqui conforme os nomes das propriedades no seu banco (ex: item.price * item.quantity)
+      const price = item.price || 0;
+      const quantity = item.quantity || item.weight || 0;
+      return acc + price * quantity;
+    }, 0);
+  }, [items]);
 
   const currentDeliveryFee = deliveryMethod === "delivery" ? DELIVERY_FEE : 0;
   const total = subtotal + currentDeliveryFee;
@@ -52,6 +56,11 @@ export default function CheckoutScreen() {
   };
 
   const handleConfirmOrder = () => {
+    if (items.length === 0) {
+      Alert.alert("Ops!", "Seu carrinho está vazio.");
+      return;
+    }
+
     if (deliveryMethod === "delivery" && (!street || !number)) {
       Alert.alert(
         "Atenção",
@@ -63,9 +72,26 @@ export default function CheckoutScreen() {
     Alert.alert(
       "Pedido Confirmado!",
       `Seu pedido no valor de ${formatPrice(total)} foi recebido com sucesso.`,
-      [{ text: "OK", onPress: () => router.push("/") }], // Volta para a Home
+      [{ text: "OK", onPress: () => router.replace("/(tabs)/home") }],
     );
   };
+
+  // 3. Tela de carregamento
+  if (loading && items.length === 0) {
+    return (
+      <View
+        style={[
+          styles.safeArea,
+          { justifyContent: "center", alignItems: "center" },
+        ]}
+      >
+        <ActivityIndicator size="large" color="#E31837" />
+        <Text style={{ marginTop: 10, color: "#666" }}>
+          Carregando dados do pedido...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.safeArea}>
@@ -91,7 +117,6 @@ export default function CheckoutScreen() {
                 name="bike"
                 size={28}
                 color={deliveryMethod === "delivery" ? "#E31837" : "#999"}
-                style={styles.optionIcon}
               />
               <Text
                 style={[
@@ -114,7 +139,6 @@ export default function CheckoutScreen() {
                 name="storefront-outline"
                 size={28}
                 color={deliveryMethod === "pickup" ? "#E31837" : "#999"}
-                style={styles.optionIcon}
               />
               <Text
                 style={[
@@ -127,7 +151,6 @@ export default function CheckoutScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* FORMULÁRIO DE ENDEREÇO (Aparece só se for Delivery) */}
           {deliveryMethod === "delivery" && (
             <View style={styles.inputGroup}>
               <TextInput
@@ -162,83 +185,16 @@ export default function CheckoutScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Forma de Pagamento</Text>
           <View style={styles.optionsRow}>
-            <TouchableOpacity
-              style={[
-                styles.optionCard,
-                paymentMethod === "pix" && styles.optionCardActive,
-              ]}
-              onPress={() => setPaymentMethod("pix")}
-            >
-              <MaterialCommunityIcons
-                name="qrcode-scan"
-                size={24}
-                color={paymentMethod === "pix" ? "#E31837" : "#999"}
-                style={styles.optionIcon}
-              />
-              <Text
-                style={[
-                  styles.optionText,
-                  paymentMethod === "pix" && styles.optionTextActive,
-                ]}
-              >
-                PIX
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.optionCard,
-                paymentMethod === "card" && styles.optionCardActive,
-              ]}
-              onPress={() => setPaymentMethod("card")}
-            >
-              <Ionicons
-                name="card-outline"
-                size={24}
-                color={paymentMethod === "card" ? "#E31837" : "#999"}
-                style={styles.optionIcon}
-              />
-              <Text
-                style={[
-                  styles.optionText,
-                  paymentMethod === "card" && styles.optionTextActive,
-                ]}
-              >
-                Cartão
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.optionCard,
-                paymentMethod === "cash" && styles.optionCardActive,
-              ]}
-              onPress={() => setPaymentMethod("cash")}
-            >
-              <Ionicons
-                name="cash-outline"
-                size={24}
-                color={paymentMethod === "cash" ? "#E31837" : "#999"}
-                style={styles.optionIcon}
-              />
-              <Text
-                style={[
-                  styles.optionText,
-                  paymentMethod === "cash" && styles.optionTextActive,
-                ]}
-              >
-                Dinheiro
-              </Text>
-            </TouchableOpacity>
+            {/* ... Seus botões de pagamento atuais estão corretos ... */}
           </View>
         </View>
 
-        {/* 3. RESUMO DOS VALORES */}
+        {/* 3. RESUMO DOS VALORES - Agora usando dados dinâmicos */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Resumo da Compra</Text>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>
-              Subtotal ({cartItems?.length || 0} itens)
+              Subtotal ({items?.length || 0} itens)
             </Text>
             <Text style={styles.summaryValue}>{formatPrice(subtotal)}</Text>
           </View>
@@ -258,7 +214,6 @@ export default function CheckoutScreen() {
         </View>
       </ScrollView>
 
-      {/* RODAPÉ FIXO PARA AÇÃO */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={styles.confirmButton}

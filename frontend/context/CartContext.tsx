@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+} from "react";
 import * as cartService from "@/services/cart";
 import Toast from "react-native-toast-message";
 
@@ -32,7 +39,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const cartCount = items.length;
 
-  async function refreshCart() {
+  // 🔹 REFRESH
+  const refreshCart = useCallback(async () => {
     try {
       setLoading(true);
       const data = await cartService.getCartService();
@@ -46,102 +54,125 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }
-
-  async function addItem(data: AddCartItemDTO) {
-    const previousItems = [...items];
-
-    const tempItem = {
-      id: `temp-${Date.now()}`,
-      product_id: data.product_id,
-      quantity: data.quantity || 0,
-      weight: data.weight || 0,
-      product: {},
-    };
-
-    setItems((prev) => [...prev, tempItem]);
-
-    try {
-      await cartService.addCartItemService(data);
-      await refreshCart();
-    } catch (err) {
-      setItems(previousItems);
-      console.error("Erro ao adicionar item", err);
-      throw err;
-    }
-  }
-
-  async function updateItem(
-    id: string,
-    data: { quantity?: number; weight?: number },
-  ) {
-    const previousItems = [...items];
-
-    setItems((currentItems) =>
-      currentItems.map((item) =>
-        item.id === id ? { ...item, ...data } : item,
-      ),
-    );
-
-    try {
-      setLoading(true);
-      await cartService.updateCartItemService(id, data);
-
-      const res = await cartService.getCartService();
-      if (res) {
-        setCart(res.cart);
-        setItems(res.items || []);
-      }
-    } catch (err) {
-      setItems(previousItems);
-      console.error("Erro ao atualizar item", err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function removeItem(id: string) {
-    const previousItems = [...items];
-    setItems((currentItems) => currentItems.filter((item) => item.id !== id));
-
-    try {
-      setLoading(true);
-      await cartService.removeCartItemService(id);
-
-      Toast.show({ type: "success", text1: "Removido com sucesso!" });
-      const res = await cartService.getCartService();
-      if (res) {
-        setCart(res.cart);
-        setItems(res.items || []);
-      }
-    } catch (err) {
-      setItems(previousItems);
-      console.error("Erro ao remover item", err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    refreshCart();
   }, []);
 
-  return (
-    <CartContext.Provider
-      value={{
-        cart,
-        items,
-        loading,
-        cartCount,
-        refreshCart,
-        addItem,
-        updateItem,
-        removeItem,
-      }}
-    >
-      {children}
-    </CartContext.Provider>
+  const addItem = useCallback(
+    async (data: AddCartItemDTO) => {
+      const tempItem = {
+        id: `temp-${Date.now()}`,
+        product_id: data.product_id,
+        quantity: data.quantity || 0,
+        weight: data.weight || 0,
+        product: {},
+      };
+
+      setItems((prev) => [...prev, tempItem]);
+
+      try {
+        await cartService.addCartItemService(data);
+        await refreshCart();
+      } catch (err) {
+        // Em caso de erro, removemos o item temporário recarregando o carrinho real
+        await refreshCart();
+        console.error("Erro ao adicionar item", err);
+        throw err;
+      }
+    },
+    [refreshCart],
   );
+
+  const updateItem = useCallback(
+    async (id: string, data: { quantity?: number; weight?: number }) => {
+      setItems((currentItems) =>
+        currentItems.map((item) =>
+          item.id === id ? { ...item, ...data } : item,
+        ),
+      );
+
+      try {
+        setLoading(true);
+        await cartService.updateCartItemService(id, data);
+
+        const res = await cartService.getCartService();
+        if (res) {
+          setCart(res.cart);
+          setItems(res.items || []);
+        }
+      } catch (err) {
+        // Recarrega o estado real em caso de erro
+        const res = await cartService.getCartService();
+        if (res) {
+          setCart(res.cart);
+          setItems(res.items || []);
+        }
+        console.error("Erro ao atualizar item", err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  const removeItem = useCallback(
+    async (id: string) => {
+      setItems((currentItems) => currentItems.filter((item) => item.id !== id));
+
+      try {
+        setLoading(true);
+        await cartService.removeCartItemService(id);
+
+        Toast.show({ type: "success", text1: "Removido com sucesso!" });
+
+        const res = await cartService.getCartService();
+        if (res) {
+          setCart(res.cart);
+          setItems(res.items || []);
+        }
+      } catch (err) {
+        // Recarrega o estado real em caso de erro
+        const res = await cartService.getCartService();
+        if (res) {
+          setCart(res.cart);
+          setItems(res.items || []);
+        }
+        console.error("Erro ao remover item", err);
+      } finally {
+        setLoading(false);
+      }
+    },
+    [],
+  );
+
+  // 🔹 INITIAL LOAD
+  useEffect(() => {
+    refreshCart();
+  }, [refreshCart]);
+
+  // 🔹 MEMO DO CONTEXTO
+  const value = useMemo(
+    () => ({
+      cart,
+      items,
+      loading,
+      cartCount,
+      refreshCart,
+      addItem,
+      updateItem,
+      removeItem,
+    }),
+    [
+      cart,
+      items,
+      loading,
+      cartCount,
+      refreshCart,
+      addItem,
+      updateItem,
+      removeItem,
+    ],
+  );
+
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }
 
 export function useCart() {

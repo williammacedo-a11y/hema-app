@@ -31,6 +31,7 @@ export const styles = StyleSheet.create({
   },
   contentPadding: {
     padding: 16,
+    paddingTop: 60,
     paddingBottom: 160,
   },
   section: {

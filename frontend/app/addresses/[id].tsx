@@ -70,7 +70,10 @@ export default function AddressFormScreen() {
       }
     } catch (error) {
       console.error(error);
-      Toast.show({ type: "error", text1: "Não foi possível carregar os dados" });
+      Toast.show({
+        type: "error",
+        text1: "Não foi possível carregar os dados",
+      });
     } finally {
       setLoading(false);
     }
@@ -97,44 +100,84 @@ export default function AddressFormScreen() {
   };
 
   const handleSave = async () => {
+    // 1. Validação básica de campos
     if (!zipCode || !street || !number || !neighborhood || !city || !state) {
       Alert.alert("Atenção", "Preencha todos os campos obrigatórios (*).");
       return;
     }
 
-    try {
-      setSaving(true);
-      const payload = {
-        label,
-        zip_code: zipCode,
-        street,
-        number,
-        complement,
-        neighborhood,
-        city,
-        state,
-        is_default: isDefault,
-      };
+    // Função interna que realmente executa a chamada à API
+    const executeSave = async () => {
+      try {
+        setSaving(true);
+        const payload = {
+          label,
+          zip_code: zipCode,
+          street,
+          number,
+          complement,
+          neighborhood,
+          city,
+          state,
+          is_default: isDefault,
+        };
 
-      if (isEditing) {
-        await updateAddress(id as string, payload);
-        Toast.show({ type: "success", text1: "Endereço atualizado!" });
-      } else {
-        await createAddress(payload);
-        Toast.show({ type: "success", text1: "Endereço adicionado!" });
+        if (isEditing) {
+          await updateAddress(id as string, payload);
+          Toast.show({ type: "success", text1: "Endereço atualizado!" });
+        } else {
+          await createAddress(payload);
+          Toast.show({ type: "success", text1: "Endereço adicionado!" });
+        }
+
+        router.back();
+      } catch (error) {
+        console.error(error);
+        Toast.show({
+          type: "error",
+          text1: "Erro ao salvar",
+          text2: "Verifique os dados e tente novamente.",
+        });
+      } finally {
+        setSaving(false);
       }
-      
-      router.back();
-    } catch (error) {
-      console.error(error);
-      Toast.show({
-        type: "error",
-        text1: "Erro ao salvar",
-        text2: "Verifique os dados e tente novamente.",
-      });
-    } finally {
-      setSaving(false);
+    };
+
+    // 2. Lógica de Verificação do Endereço Padrão
+    if (isDefault) {
+      try {
+        setSaving(true); // Ativa o loading enquanto checa os endereços
+        const allAddresses = await getAddresses();
+
+        // Verifica se existe OUTRO endereço que já é o padrão
+        const existingDefault = allAddresses.find(
+          (a) => a.is_default === true && a.id !== id,
+        );
+
+        if (existingDefault) {
+          setSaving(false); // Para o loading para mostrar o alerta
+          Alert.alert(
+            "Alterar padrão?",
+            `O endereço "${existingDefault.label || "Meu Endereço"}" já está definido como padrão. Deseja tornar este novo endereço o seu principal?`,
+            [
+              { text: "Cancelar", style: "cancel" },
+              {
+                text: "Sim, alterar",
+                onPress: () => executeSave(),
+              },
+            ],
+          );
+          return; // Interrompe o handleSave, aguarda o clique no Alert
+        }
+      } catch (err) {
+        console.error("Erro ao verificar endereços existentes", err);
+      } finally {
+        setSaving(false);
+      }
     }
+
+    // Se não for 'default' ou se não houver conflito, salva direto
+    executeSave();
   };
 
   if (loading) {
@@ -153,8 +196,20 @@ export default function AddressFormScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#E5E7EB", backgroundColor: "#fff" }}>
-          <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            padding: 16,
+            borderBottomWidth: 1,
+            borderBottomColor: "#E5E7EB",
+            backgroundColor: "#fff",
+          }}
+        >
+          <TouchableOpacity
+            onPress={() => router.back()}
+            style={{ marginRight: 16 }}
+          >
             <Ionicons name="close" size={24} color="#111827" />
           </TouchableOpacity>
           <Text style={{ fontSize: 18, fontWeight: "bold", color: "#111827" }}>
@@ -164,10 +219,23 @@ export default function AddressFormScreen() {
 
         <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
           <View style={{ marginBottom: 20 }}>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 }}>
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "600",
+                color: "#374151",
+                marginBottom: 8,
+              }}
+            >
               IDENTIFICAÇÃO DO LOCAL
             </Text>
-            <View style={{ backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 12 }}>
+            <View
+              style={{
+                backgroundColor: "#F3F4F6",
+                borderRadius: 10,
+                paddingHorizontal: 12,
+              }}
+            >
               <TextInput
                 placeholder="Ex: Minha Casa, Trabalho, Casa da Mãe..."
                 style={{ height: 50, fontSize: 15, color: "#111827" }}
@@ -177,12 +245,32 @@ export default function AddressFormScreen() {
             </View>
           </View>
 
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 20 }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 12,
+              marginBottom: 20,
+            }}
+          >
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
                 CEP *
               </Text>
-              <View style={{ backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 12 }}>
+              <View
+                style={{
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                }}
+              >
                 <TextInput
                   placeholder="00000-000"
                   keyboardType="numeric"
@@ -202,8 +290,23 @@ export default function AddressFormScreen() {
           </View>
 
           <View style={{ marginBottom: 20 }}>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 }}>Rua/Avenida *</Text>
-            <View style={{ backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 12 }}>
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "600",
+                color: "#374151",
+                marginBottom: 8,
+              }}
+            >
+              Rua/Avenida *
+            </Text>
+            <View
+              style={{
+                backgroundColor: "#F3F4F6",
+                borderRadius: 10,
+                paddingHorizontal: 12,
+              }}
+            >
               <TextInput
                 placeholder="Av. Paulista..."
                 style={{ height: 50, fontSize: 15, color: "#111827" }}
@@ -215,8 +318,23 @@ export default function AddressFormScreen() {
 
           <View style={{ flexDirection: "row", gap: 16, marginBottom: 20 }}>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 }}>Número *</Text>
-              <View style={{ backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 12 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                Número *
+              </Text>
+              <View
+                style={{
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                }}
+              >
                 <TextInput
                   placeholder="Ex: 1000"
                   style={{ height: 50, fontSize: 15, color: "#111827" }}
@@ -226,8 +344,23 @@ export default function AddressFormScreen() {
               </View>
             </View>
             <View style={{ flex: 2 }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 }}>Complemento</Text>
-              <View style={{ backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 12 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                Complemento
+              </Text>
+              <View
+                style={{
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                }}
+              >
                 <TextInput
                   placeholder="Apto, Bloco..."
                   style={{ height: 50, fontSize: 15, color: "#111827" }}
@@ -239,8 +372,23 @@ export default function AddressFormScreen() {
           </View>
 
           <View style={{ marginBottom: 20 }}>
-            <Text style={{ fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 }}>Bairro *</Text>
-            <View style={{ backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 12 }}>
+            <Text
+              style={{
+                fontSize: 14,
+                fontWeight: "600",
+                color: "#374151",
+                marginBottom: 8,
+              }}
+            >
+              Bairro *
+            </Text>
+            <View
+              style={{
+                backgroundColor: "#F3F4F6",
+                borderRadius: 10,
+                paddingHorizontal: 12,
+              }}
+            >
               <TextInput
                 placeholder="Ex: Centro"
                 style={{ height: 50, fontSize: 15, color: "#111827" }}
@@ -252,8 +400,23 @@ export default function AddressFormScreen() {
 
           <View style={{ flexDirection: "row", gap: 16, marginBottom: 30 }}>
             <View style={{ flex: 2 }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 }}>Cidade *</Text>
-              <View style={{ backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 12 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                Cidade *
+              </Text>
+              <View
+                style={{
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                }}
+              >
                 <TextInput
                   placeholder="Ex: São Paulo"
                   style={{ height: 50, fontSize: 15, color: "#111827" }}
@@ -263,8 +426,23 @@ export default function AddressFormScreen() {
               </View>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: "#374151", marginBottom: 8 }}>UF *</Text>
-              <View style={{ backgroundColor: "#F3F4F6", borderRadius: 10, paddingHorizontal: 12 }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontWeight: "600",
+                  color: "#374151",
+                  marginBottom: 8,
+                }}
+              >
+                UF *
+              </Text>
+              <View
+                style={{
+                  backgroundColor: "#F3F4F6",
+                  borderRadius: 10,
+                  paddingHorizontal: 12,
+                }}
+              >
                 <TextInput
                   placeholder="SP"
                   maxLength={2}
@@ -277,9 +455,20 @@ export default function AddressFormScreen() {
             </View>
           </View>
 
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 14, borderTopWidth: 1, borderTopColor: "#E5E7EB" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              paddingVertical: 14,
+              borderTopWidth: 1,
+              borderTopColor: "#E5E7EB",
+            }}
+          >
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 16, fontWeight: "600", color: "#111827" }}>
+              <Text
+                style={{ fontSize: 16, fontWeight: "600", color: "#111827" }}
+              >
                 Tornar como padrão
               </Text>
               <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
@@ -297,9 +486,25 @@ export default function AddressFormScreen() {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#E5E7EB" }}>
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: 16,
+          backgroundColor: "#fff",
+          borderTopWidth: 1,
+          borderTopColor: "#E5E7EB",
+        }}
+      >
         <TouchableOpacity
-          style={{ backgroundColor: saving ? "#F87171" : "#E31837", padding: 16, borderRadius: 12, alignItems: "center" }}
+          style={{
+            backgroundColor: saving ? "#F87171" : "#E31837",
+            padding: 16,
+            borderRadius: 12,
+            alignItems: "center",
+          }}
           onPress={handleSave}
           disabled={saving}
           activeOpacity={0.8}
