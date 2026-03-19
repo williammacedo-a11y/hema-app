@@ -1,19 +1,19 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StatusBar,
   ScrollView,
-  TextInput,
   Alert,
   ActivityIndicator,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 
 import { styles } from "../styles/checkout.styles";
 import { useCart } from "@/context/CartContext";
+import { getAddresses, Address } from "@/services/addresses";
 
 type DeliveryMethod = "pickup" | "delivery";
 type PaymentMethod = "pix" | "card" | "cash";
@@ -22,23 +22,63 @@ const DELIVERY_FEE = 12.5;
 
 export default function CheckoutScreen() {
   const router = useRouter();
-
-  // 1. Pegando os dados REAIS do seu Context
   const { items, loading, cart } = useCart();
 
   const [deliveryMethod, setDeliveryMethod] =
     useState<DeliveryMethod>("delivery");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
 
-  const [street, setStreet] = useState("");
-  const [number, setNumber] = useState("");
-  const [complement, setComplement] = useState("");
+  const [addresses, setAddresses] = useState<Address[]>([]);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
+    null,
+  );
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
 
-  // 2. Cálculo do Subtotal baseado no seu Context
-  // Se o seu backend já retornar o total no objeto 'cart', você pode usar cart.total
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      const loadAddresses = async () => {
+        setLoadingAddresses((prev) => addresses.length === 0);
+
+        try {
+          const data = await getAddresses();
+
+          if (isActive) {
+            setAddresses(data);
+
+            setSelectedAddressId((currentSelectedId) => {
+              if (currentSelectedId) return currentSelectedId;
+
+              if (data.length > 0) {
+                const defaultAddr = data.find((a) => a.is_default);
+                return defaultAddr ? defaultAddr.id : data[0].id;
+              }
+              return null;
+            });
+          }
+        } catch (error) {
+          console.error("Erro ao buscar endereços:", error);
+          if (isActive) {
+            Alert.alert("Erro", "Não foi possível carregar seus endereços.");
+          }
+        } finally {
+          if (isActive) {
+            setLoadingAddresses(false);
+          }
+        }
+      };
+
+      loadAddresses();
+
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
+
   const subtotal = useMemo(() => {
     return (items || []).reduce((acc, item) => {
-      // Ajuste aqui conforme os nomes das propriedades no seu banco (ex: item.price * item.quantity)
       const price = item.price || 0;
       const quantity = item.quantity || item.weight || 0;
       return acc + price * quantity;
@@ -61,10 +101,10 @@ export default function CheckoutScreen() {
       return;
     }
 
-    if (deliveryMethod === "delivery" && (!street || !number)) {
+    if (deliveryMethod === "delivery" && !selectedAddressId) {
       Alert.alert(
         "Atenção",
-        "Por favor, preencha a rua e o número para a entrega.",
+        "Por favor, selecione ou adicione um endereço para a entrega.",
       );
       return;
     }
@@ -76,7 +116,6 @@ export default function CheckoutScreen() {
     );
   };
 
-  // 3. Tela de carregamento
   if (loading && items.length === 0) {
     return (
       <View
@@ -151,45 +190,206 @@ export default function CheckoutScreen() {
             </TouchableOpacity>
           </View>
 
-          {deliveryMethod === "delivery" && (
-            <View style={styles.inputGroup}>
-              <TextInput
-                style={styles.input}
-                placeholder="Nome da Rua / Avenida"
-                placeholderTextColor="#999"
-                value={street}
-                onChangeText={setStreet}
-              />
-              <View style={styles.rowInputs}>
-                <TextInput
-                  style={[styles.input, styles.inputHalfLeft]}
-                  placeholder="Número"
-                  keyboardType="numeric"
-                  placeholderTextColor="#999"
-                  value={number}
-                  onChangeText={setNumber}
+          {/* DADOS DE ENTREGA / RETIRADA */}
+          <View style={styles.deliveryDetailsContainer}>
+            {deliveryMethod === "pickup" ? (
+              <View style={styles.storeInfoBox}>
+                <MaterialCommunityIcons
+                  name="map-marker-radius"
+                  size={24}
+                  color="#E31837"
                 />
-                <TextInput
-                  style={[styles.input, styles.inputHalfRight]}
-                  placeholder="Complemento"
-                  placeholderTextColor="#999"
-                  value={complement}
-                  onChangeText={setComplement}
-                />
+                <View style={styles.storeInfoTextContainer}>
+                  <Text style={styles.storeInfoTitle}>
+                    Endereço de Retirada
+                  </Text>
+                  <Text style={styles.storeInfoText}>
+                    R. São José dos Pinhais, 187 - Sítio Cercado
+                  </Text>
+                  <Text style={styles.storeInfoText}>
+                    Curitiba - PR, 81910-010
+                  </Text>
+                  <Text style={styles.storeInfoHours}>
+                    <MaterialCommunityIcons
+                      name="clock-outline"
+                      size={14}
+                      color="#666"
+                    />{" "}
+                    09hAM às 18h30PM (Fechado aos domingos)
+                  </Text>
+                </View>
               </View>
-            </View>
-          )}
+            ) : (
+              <View>
+                <View style={styles.addressHeader}>
+                  <Text style={styles.subSectionTitle}>
+                    Selecione o Endereço
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => router.push("/addresses/new" as any)}
+                  >
+                    <MaterialCommunityIcons
+                      name="plus-circle"
+                      size={24}
+                      color="#E31837"
+                    />
+                  </TouchableOpacity>
+                </View>
+
+                {loadingAddresses ? (
+                  <ActivityIndicator
+                    size="small"
+                    color="#E31837"
+                    style={{ marginVertical: 20 }}
+                  />
+                ) : addresses.length === 0 ? (
+                  <Text style={styles.emptyAddressText}>
+                    Nenhum endereço cadastrado.
+                  </Text>
+                ) : (
+                  addresses.map((address) => (
+                    <TouchableOpacity
+                      key={address.id}
+                      style={[
+                        styles.addressItem,
+                        selectedAddressId === address.id &&
+                          styles.addressItemActive,
+                      ]}
+                      onPress={() => setSelectedAddressId(address.id)}
+                    >
+                      {/* Ícone de seleção (Radio) */}
+                      <MaterialCommunityIcons
+                        name={
+                          selectedAddressId === address.id
+                            ? "radiobox-marked"
+                            : "radiobox-blank"
+                        }
+                        size={20}
+                        color={
+                          selectedAddressId === address.id ? "#E31837" : "#999"
+                        }
+                      />
+
+                      {/* Container principal dos textos */}
+                      <View style={styles.addressItemTextContainer}>
+                        <View
+                          style={{
+                            flexDirection: "row",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.addressItemStreet,
+                              { flexShrink: 1 },
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {address.street}, {address.number}
+                          </Text>
+
+                          {address.is_default && (
+                            <View style={styles.defaultBadge}>
+                              <MaterialCommunityIcons
+                                name="star"
+                                size={12}
+                                color="#E31837"
+                              />
+                              <Text style={styles.defaultBadgeText}>
+                                Favorito
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Detalhes do endereço ficam logo abaixo */}
+                        <Text style={styles.addressItemDetails}>
+                          {address.neighborhood} - {address.city}/
+                          {address.state}
+                          {address.complement ? ` • ${address.complement}` : ""}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  ))
+                )}
+              </View>
+            )}
+          </View>
         </View>
 
         {/* 2. FORMA DE PAGAMENTO */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Forma de Pagamento</Text>
           <View style={styles.optionsRow}>
-            {/* ... Seus botões de pagamento atuais estão corretos ... */}
+            <TouchableOpacity
+              style={[
+                styles.optionCard,
+                paymentMethod === "pix" && styles.optionCardActive,
+              ]}
+              onPress={() => setPaymentMethod("pix")}
+            >
+              <MaterialCommunityIcons
+                name="qrcode"
+                size={24}
+                color={paymentMethod === "pix" ? "#E31837" : "#999"}
+              />
+              <Text
+                style={[
+                  styles.optionText,
+                  paymentMethod === "pix" && styles.optionTextActive,
+                ]}
+              >
+                PIX
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.optionCard,
+                paymentMethod === "card" && styles.optionCardActive,
+              ]}
+              onPress={() => setPaymentMethod("card")}
+            >
+              <MaterialCommunityIcons
+                name="credit-card-outline"
+                size={24}
+                color={paymentMethod === "card" ? "#E31837" : "#999"}
+              />
+              <Text
+                style={[
+                  styles.optionText,
+                  paymentMethod === "card" && styles.optionTextActive,
+                ]}
+              >
+                Cartão
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.optionCard,
+                paymentMethod === "cash" && styles.optionCardActive,
+              ]}
+              onPress={() => setPaymentMethod("cash")}
+            >
+              <MaterialCommunityIcons
+                name="cash"
+                size={24}
+                color={paymentMethod === "cash" ? "#E31837" : "#999"}
+              />
+              <Text
+                style={[
+                  styles.optionText,
+                  paymentMethod === "cash" && styles.optionTextActive,
+                ]}
+              >
+                Dinheiro
+              </Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* 3. RESUMO DOS VALORES - Agora usando dados dinâmicos */}
+        {/* 3. RESUMO DOS VALORES */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Resumo da Compra</Text>
           <View style={styles.summaryRow}>

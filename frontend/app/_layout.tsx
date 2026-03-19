@@ -20,10 +20,6 @@ import { CartProvider } from "@/context/CartContext";
 
 export { ErrorBoundary } from "expo-router";
 
-export const unstable_settings = {
-  initialRouteName: "(tabs)",
-};
-
 SplashScreen.preventAutoHideAsync();
 
 const toastConfig = {
@@ -110,40 +106,9 @@ function RootLayoutNav() {
       <CartProvider>
         <View style={{ flex: 1, backgroundColor: "#fff" }}>
           <AuthGuard>
-            <Stack>
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-              <Stack.Screen name="auth" options={{ headerShown: false }} />
-
-              <Stack.Screen name="checkout" options={{ headerShown: false }} />
-              <Stack.Screen
-                name="addresses/index"
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="addresses/[id]"
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="category/[id]"
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen
-                name="product/[id]"
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen name="modal" options={{ presentation: "modal" }} />
-              <View
-                pointerEvents="none"
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  borderWidth: 2,
-                  borderColor: "red",
-                }}
-              />
+            <Stack screenOptions={{ headerShown: false }}>
+              <Stack.Screen name="(tabs)" />
+              <Stack.Screen name="auth" />
             </Stack>
           </AuthGuard>
           <Toast config={toastConfig} position="top" topOffset={60} />

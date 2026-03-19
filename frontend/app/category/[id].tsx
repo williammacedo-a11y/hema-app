@@ -10,31 +10,57 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Toast from "react-native-toast-message"; 
+import Toast from "react-native-toast-message";
 
 import { getProductsByCategory } from "@/services/products";
 import { ProductCard } from "@/components/ProductCard";
 import { Product } from "@/types/product";
 import { styles } from "@/styles/category.styles";
-import { useCart } from "@/context/CartContext"; 
+import { useCart } from "@/context/CartContext";
+
+const LIMIT = 30;
 
 export default function CategoryScreen() {
   const router = useRouter();
   const { addItem } = useCart();
-  const [loading, setLoading] = useState(true);
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
+
   const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
   useEffect(() => {
-    async function loadProducts() {
+    async function loadInitialProducts() {
       if (!id) return;
       setLoading(true);
-      const data = await getProductsByCategory(id);
+
+      const data = await getProductsByCategory(id, LIMIT, 0);
       setProducts(data);
+      setOffset(0);
+
+      // Se a API retornou menos do que 20, significa que não tem mais páginas.
+      setHasMore(data.length === LIMIT);
       setLoading(false);
     }
-    loadProducts();
+    loadInitialProducts();
   }, [id]);
+
+  const loadMoreProducts = async () => {
+    if (!hasMore || loadingMore || !id) return;
+
+    setLoadingMore(true);
+    const nextOffset = offset + LIMIT;
+
+    const data = await getProductsByCategory(id, LIMIT, nextOffset);
+
+    setProducts((prev) => [...prev, ...data]);
+    setOffset(nextOffset);
+
+    setHasMore(data.length === LIMIT);
+    setLoadingMore(false);
+  };
 
   const handleAddToCart = async (product: Product) => {
     try {
@@ -58,6 +84,39 @@ export default function CategoryScreen() {
       });
       console.error("Erro na categoria:", error);
     }
+  };
+
+  const renderFooter = () => {
+    if (!hasMore && products.length > 0) return null;
+
+    return (
+      <View style={{ paddingVertical: 20, alignItems: "center" }}>
+        {loadingMore ? (
+          <ActivityIndicator size="small" color="#E31837" />
+        ) : (
+          hasMore &&
+          products.length > 0 && (
+            <TouchableOpacity
+              onPress={loadMoreProducts}
+              style={{
+                backgroundColor: "#F5F5F5",
+                paddingVertical: 12,
+                paddingHorizontal: 24,
+                borderRadius: 8,
+                borderWidth: 1,
+                borderColor: "#EAEAEA",
+              }}
+            >
+              <Text
+                style={{ color: "#E31837", fontWeight: "600", fontSize: 14 }}
+              >
+                Mostrar Mais
+              </Text>
+            </TouchableOpacity>
+          )
+        )}
+      </View>
+    );
   };
 
   return (
@@ -84,7 +143,7 @@ export default function CategoryScreen() {
         <FlatList
           style={{ flex: 1, width: "100%" }}
           data={products}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item, index) => `${item.id}-${index}`}
           numColumns={2}
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.columnWrapper}
@@ -95,7 +154,6 @@ export default function CategoryScreen() {
                 product={item}
                 onPress={() => router.push(`/product/${item.id}`)}
                 onAdd={() => handleAddToCart(item)}
-                isGrid={true}
               />
             </View>
           )}
@@ -107,6 +165,7 @@ export default function CategoryScreen() {
               </Text>
             </View>
           }
+          ListFooterComponent={renderFooter}
         />
       )}
     </SafeAreaView>
