@@ -91,11 +91,18 @@ export class ProductsService {
     return data;
   }
 
-  async findCategoryProducts(categoryId: string) {
+  async findCategoryProducts(
+    categoryId: string,
+    limit: number,
+    offset: number,
+  ) {
+    const to = offset + limit - 1;
+
     const { data, error } = await supabase
       .from('products')
       .select('id, name, price, price_per_kg, image_url, type')
-      .eq('category_id', categoryId);
+      .eq('category_id', categoryId)
+      .range(offset, to);
 
     if (error) throw new Error(error.message);
 

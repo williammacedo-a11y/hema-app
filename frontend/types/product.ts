@@ -6,6 +6,7 @@ export interface Product {
   price: number;
   price_per_kg: number;
   image_url: string;
+  similarity_score: number;
 }
 
 export interface CategoryCatalog {

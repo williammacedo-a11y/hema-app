@@ -7,10 +7,9 @@ export class SearchService {
     limitCount: number = 20,
     offsetCount: number = 0,
   ) {
-    
     const supabaseUrl =
       'https://popkqrorbtubrmyomzix.supabase.co/rest/v1/rpc/search_products';
-    const supabaseKey = process.env.SUPABASE_ANON_KEY || ''; 
+    const supabaseKey = process.env.SUPABASE_API_KEY || '';
 
     try {
       const response = await fetch(supabaseUrl, {
@@ -29,6 +28,7 @@ export class SearchService {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.error('ERRO DO SUPABASE:', errorData); // Isso ajuda a debugar se der erro de novo
         throw new HttpException(errorData, response.status);
       }
 

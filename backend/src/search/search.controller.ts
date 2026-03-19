@@ -3,8 +3,8 @@ import { SearchService } from './search.service';
 
 export class SearchProductsDto {
   search_query: string;
-  limit_count?: number;
-  offset_count?: number;
+  limit?: number;
+  offset?: number;
 }
 
 @Controller('search')
@@ -15,8 +15,8 @@ export class SearchController {
   async searchProducts(@Body() body: SearchProductsDto) {
     return this.searchService.searchProducts(
       body.search_query,
-      body.limit_count,
-      body.offset_count,
+      body.limit,
+      body.offset,
     );
   }
 }

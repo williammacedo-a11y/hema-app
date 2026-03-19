@@ -1,84 +1,80 @@
 import React from "react";
 import { View, Text, Image, TouchableOpacity } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { Product } from "@/types/product";
-import { cardStyles as styles } from "@/styles/productCard.styles";
 
-interface Props {
+import { cardStyles } from "@/styles/productCard.styles"; // Ajuste o caminho do seu estilo se precisar
+import { Product } from "@/types/product";
+
+interface ProductCardProps {
   product: Product;
   onPress: () => void;
   onAdd: () => void;
-  isGrid?: boolean;
+  isCarousel?: boolean; // Propriedade nova para controlar a largura!
 }
 
 export function ProductCard({
   product,
   onPress,
   onAdd,
-  isGrid = false,
-}: Props) {
-  const getDisplayPrice = () => {
-    const price = product.price ?? 0;
-    const formatted = price.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
+  isCarousel = false,
+}: ProductCardProps) {
+  // LÓGICA DO PREÇO: Verifica se é por peso ou unidade
+  const isKg =
+    product.price_per_kg !== null && product.price_per_kg !== undefined;
+  const displayPrice = isKg ? product.price_per_kg : product.price;
+  const unitLabel = isKg ? " /kg" : " /un";
 
-    if (product.type === "weight" && product.price_per_kg) {
-      return `${product.price_per_kg.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} /kg`;
-    }
-    return formatted;
-  };
-
-  const capitalizeName = product.name
-    ? product.name.charAt(0).toUpperCase() + product.name.slice(1).toLowerCase()
-    : "";
-
-  const dynamicAspectRatio = isGrid
-    ? product.id.length % 2 === 0
-      ? 0.85
-      : 1.1
-    : 1;
+  const formattedPrice = displayPrice
+    ? displayPrice.toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+      })
+    : "R$ 0,00";
 
   return (
     <TouchableOpacity
-      style={[styles.productCard, !isGrid && styles.carouselWidth]}
-      activeOpacity={0.9}
+      style={[
+        cardStyles.productCard,
+        isCarousel && cardStyles.carouselWidth, // Aplica a largura fixa só se for carrossel
+      ]}
       onPress={onPress}
+      activeOpacity={0.9}
     >
-      <View style={styles.imageContainer}>
+      {/* IMAGEM OU PLACEHOLDER */}
+      <View style={cardStyles.imageContainer}>
         {product.image_url ? (
           <Image
             source={{ uri: product.image_url }}
-            style={[styles.productImage, { aspectRatio: dynamicAspectRatio }]}
+            style={cardStyles.productImage}
             resizeMode="cover"
           />
         ) : (
-          <View style={styles.imageFallback}>
+          <View style={cardStyles.imageFallback}>
             <MaterialCommunityIcons
               name="image-off-outline"
               size={32}
-              color="#ccc"
+              color="#CCC"
             />
           </View>
         )}
       </View>
 
-      <View style={styles.productInfo}>
-        <Text style={styles.productName} numberOfLines={1}>
-          {capitalizeName}
-        </Text>
-        <Text style={styles.productPrice}>{getDisplayPrice()}</Text>
-      </View>
+      {/* INFORMAÇÕES DO PRODUTO */}
+      <View style={cardStyles.productInfo}>
+        <View>
+          <Text style={cardStyles.productName} numberOfLines={2}>
+            {product.name}
+          </Text>
+          <Text style={cardStyles.productPrice}>
+            {formattedPrice}
+            <Text style={cardStyles.priceUnit}>{unitLabel}</Text>
+          </Text>
+        </View>
 
-      {/* Novo botão discreto no final do card */}
-      <TouchableOpacity
-        style={styles.discreteAddButton}
-        onPress={onAdd}
-        activeOpacity={0.7}
-      >
-        <Text style={styles.discreteAddButtonText}>+ Adicionar</Text>
-      </TouchableOpacity>
+        <TouchableOpacity style={cardStyles.discreteAddButton} onPress={onAdd}>
+          <Text style={cardStyles.discreteAddButtonText}>Adicionar</Text>
+        </TouchableOpacity>
+      </View>
     </TouchableOpacity>
   );
 }

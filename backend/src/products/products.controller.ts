@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Param,
-} from '@nestjs/common';
+import { Controller, Get, Post, Param, Query } from '@nestjs/common';
 import { ProductsService } from './products.service';
 
 @Controller('products')
@@ -27,7 +22,15 @@ export class ProductsController {
   }
 
   @Get('/category/:id')
-  async findCategoryProducts(@Param('id') id: string) {
-    return this.productsService.findCategoryProducts(id);
+  async findCategoryProducts(
+    @Param('id') id: string,
+    @Query('limit') limit = '30',
+    @Query('offset') offset = '0',
+  ) {
+    return this.productsService.findCategoryProducts(
+      id,
+      Number(limit),
+      Number(offset),
+    );
   }
 }

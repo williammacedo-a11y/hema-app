@@ -5,12 +5,13 @@ export const cardStyles = StyleSheet.create({
     backgroundColor: "#FFFFFF",
     borderRadius: 10,
     overflow: "hidden",
+    flex: 1,
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 10, height: 4 },
-        shadowOpacity: 1,
-        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 6,
       },
       android: {
         elevation: 3,
@@ -19,26 +20,30 @@ export const cardStyles = StyleSheet.create({
   },
   carouselWidth: {
     width: 155,
-    marginRight: 16,
-    marginBottom: 10,
     marginTop: 10,
-    marginLeft: 4,
+    marginBottom: 10,
   },
   imageContainer: {
     width: "100%",
+    height: 130,
     backgroundColor: "#F9F9F9",
   },
   productImage: {
     width: "100%",
+    height: "100%",
   },
   imageFallback: {
+    width: "100%",
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#F5F5F5",
   },
   productInfo: {
     padding: 10,
     paddingBottom: 4,
+    flex: 1,
+    justifyContent: "space-between",
   },
   productName: {
     fontSize: 13,
@@ -46,11 +51,18 @@ export const cardStyles = StyleSheet.create({
     color: "#1A1A1A",
     lineHeight: 18,
     marginBottom: 4,
+    minHeight: 36,
   },
   productPrice: {
     fontSize: 15,
     fontWeight: "800",
     color: "#E31837",
+    marginBottom: 8,
+  },
+  priceUnit: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#999",
   },
   discreteAddButton: {
     paddingVertical: 8,

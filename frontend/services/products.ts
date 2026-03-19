@@ -36,9 +36,11 @@ export async function getProductById(id: string): Promise<Product | null> {
 
 export async function getProductsByCategory(
   category: string,
+  limit = 30,
+  offset = 0,
 ): Promise<Product[]> {
   const BASE_URL = process.env.EXPO_PUBLIC_API_URL;
-  const API_URL = `https://${BASE_URL}/products/category/${category}`;
+  const API_URL = `https://${BASE_URL}/products/category/${category}?limit=${limit}&offset=${offset}`;
 
   try {
     const response = await fetch(API_URL);
