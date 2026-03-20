@@ -1,13 +1,13 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { supabase } from 'src/lib/supabase';
+import { calculateDeliveryFee, DELIVERY_RULES } from '../utils/delivery.util';
 
 @Injectable()
 export class OrdersService {
   // Criar o registro na 'orders' e os itens na 'order_items'
   async createOrder(userId: string, dto: CreateOrderDto) {
     try {
-      // 1. Buscar o carrinho do usuário, os itens e os dados reais dos produtos em UMA query
       const { data: cart, error: cartError } = await supabase
         .from('carts')
         .select(
@@ -42,9 +42,51 @@ export class OrdersService {
         );
       }
 
-      // 2. Calcular o frete e o total final
       const isDelivery = !!dto.address_id;
-      const deliveryFee = isDelivery ? 12.5 : 0;
+
+      // 2. Calcular o Peso Total (Corrigido: iterando sobre cart.cart_items)
+      let totalWeightGrams = 0;
+      cart.cart_items.forEach((item: any) => {
+        totalWeightGrams += item.weight || 0;
+      });
+      const totalWeightKg = totalWeightGrams / 1000;
+
+      // 3. Lógica de Frete e Validações de Regras de Negócio
+      let deliveryFee = 0;
+
+      if (isDelivery) {
+        // Precisamos buscar a cidade do endereço escolhido
+        const { data: address, error: addressError } = await supabase
+          .from('addresses')
+          .select('city')
+          .eq('id', dto.address_id)
+          .single();
+
+        if (addressError || !address) {
+          throw new HttpException(
+            'Endereço não encontrado.',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        deliveryFee = calculateDeliveryFee(address.city);
+
+        // Bloqueio 1: Região não atendida
+        if (deliveryFee === -1) {
+          throw new HttpException(
+            'Não realizamos entregas para esta região. Selecione a opção "Retirar na loja".',
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+
+        // Bloqueio 2: Peso excedido para entrega
+        if (totalWeightKg > DELIVERY_RULES.MAX_WEIGHT_KG) {
+          throw new HttpException(
+            `O peso máximo para entrega é ${DELIVERY_RULES.MAX_WEIGHT_KG}kg. Seu pedido possui ${totalWeightKg.toFixed(2)}kg.`,
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+      }
 
       let calculatedTotal = 0;
 
@@ -93,7 +135,6 @@ export class OrdersService {
         );
       }
 
-      // 4. Inserir os itens na tabela 'order_items'
       const itemsWithOrderId = orderItemsToInsert.map((item) => ({
         ...item,
         order_id: newOrder.id,
@@ -128,7 +169,6 @@ export class OrdersService {
           `🚨 Iniciando ROLLBACK: Deletando a order ${newOrder.id} órfã...`,
         );
 
-        // ROLLBACK: Deleta a Order que foi criada no passo 3
         const { error: rollbackError } = await supabase
           .from('orders')
           .delete()

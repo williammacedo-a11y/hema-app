@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -20,11 +20,33 @@ import { OrdersService } from "@/services/orders";
 type DeliveryMethod = "pickup" | "delivery";
 type PaymentMethod = "pix" | "card" | "cash";
 
-const DELIVERY_FEE = 12.5;
+function calculateDeliveryFee(city?: string): number {
+  if (!city) return 0;
+
+  const normalizedCity = city
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
+
+  const tier10 = [
+    "curitiba",
+    "araucaria",
+    "balsa nova",
+    "pinhais",
+    "sao jose dos pinhais",
+  ];
+  const tier15 = ["colombo", "almirante tamandare", "piraquara"];
+
+  if (tier10.includes(normalizedCity)) return 10.0;
+  if (tier15.includes(normalizedCity)) return 15.0;
+
+  return -1; // Região não atendida
+}
 
 export default function CheckoutScreen() {
   const router = useRouter();
-  const { items, loading, cart } = useCart();
+  const { items, loading, cart, refreshCart } = useCart();
 
   const [deliveryMethod, setDeliveryMethod] =
     useState<DeliveryMethod>("delivery");
@@ -36,7 +58,6 @@ export default function CheckoutScreen() {
   );
   const [loadingAddresses, setLoadingAddresses] = useState(false);
 
-  // Novos estados para o fluxo de pedido
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
@@ -46,16 +67,12 @@ export default function CheckoutScreen() {
 
       const loadAddresses = async () => {
         setLoadingAddresses((prev) => addresses.length === 0);
-
         try {
           const data = await getAddresses();
-
           if (isActive) {
             setAddresses(data);
-
             setSelectedAddressId((currentSelectedId) => {
               if (currentSelectedId) return currentSelectedId;
-
               if (data.length > 0) {
                 const defaultAddr = data.find((a) => a.is_default);
                 return defaultAddr ? defaultAddr.id : data[0].id;
@@ -69,9 +86,7 @@ export default function CheckoutScreen() {
             Alert.alert("Erro", "Não foi possível carregar seus endereços.");
           }
         } finally {
-          if (isActive) {
-            setLoadingAddresses(false);
-          }
+          if (isActive) setLoadingAddresses(false);
         }
       };
 
@@ -83,11 +98,20 @@ export default function CheckoutScreen() {
     }, []),
   );
 
-  // 🐛 CÁLCULO CORRIGIDO: Agora trata o peso em gramas convertendo para KG
   const subtotal = cart?.total_price ? Number(cart.total_price) : 0;
 
-  const currentDeliveryFee = deliveryMethod === "delivery" ? DELIVERY_FEE : 0;
-  const total = subtotal + currentDeliveryFee;
+  // Encontra o endereço selecionado completo para ler a cidade
+  const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
+
+  // Calcula o frete: 0 se for retirada, senão calcula com base na cidade
+  const currentDeliveryFee = useMemo(() => {
+    if (deliveryMethod === "pickup") return 0;
+    return calculateDeliveryFee(selectedAddress?.city);
+  }, [deliveryMethod, selectedAddress]);
+
+  // Se o frete for -1, significa erro. Assumimos 0 na soma visual, mas travamos o botão lá embaixo.
+  const displayDeliveryFee = currentDeliveryFee === -1 ? 0 : currentDeliveryFee;
+  const total = subtotal + displayDeliveryFee;
 
   const formatPrice = (price: number) => {
     return price.toLocaleString("pt-BR", {
@@ -96,32 +120,62 @@ export default function CheckoutScreen() {
     });
   };
 
-  // 🚀 INTEGRAÇÃO COM O BACKEND
+  // ==========================================
+  // NOVO: AVISO INSTANTÂNEO DE REGIÃO INVÁLIDA
+  // ==========================================
+  React.useEffect(() => {
+    if (
+      deliveryMethod === "delivery" &&
+      currentDeliveryFee === -1 &&
+      selectedAddressId
+    ) {
+      // Pequeno timeout apenas para a animação do RadioButton finalizar suavemente
+      const timer = setTimeout(() => {
+        Alert.alert(
+          "Região não atendida 🛵",
+          "Infelizmente ainda não realizamos entregas flex para esta cidade.\n\nPor favor, selecione outro endereço ou mude para a opção 'Retirar na Loja'.",
+          [{ text: "Entendi", style: "default" }],
+        );
+      }, 100);
+
+      return () => clearTimeout(timer);
+    }
+  }, [currentDeliveryFee, deliveryMethod, selectedAddressId]);
+
   const handleConfirmOrder = async () => {
     if (items.length === 0) {
       Alert.alert("Ops!", "Seu carrinho está vazio.");
       return;
     }
 
-    if (deliveryMethod === "delivery" && !selectedAddressId) {
-      Alert.alert(
-        "Atenção",
-        "Por favor, selecione ou adicione um endereço para a entrega.",
-      );
-      return;
+    if (deliveryMethod === "delivery") {
+      if (!selectedAddressId) {
+        Alert.alert(
+          "Atenção",
+          "Por favor, selecione ou adicione um endereço para a entrega.",
+        );
+        return;
+      }
+
+      // Validação visual extra antes de bater no backend
+      if (currentDeliveryFee === -1) {
+        Alert.alert(
+          "Região não atendida",
+          "Infelizmente não realizamos entregas para esta cidade. Selecione a opção Retirada na Loja.",
+        );
+        return;
+      }
     }
 
     try {
       setIsCreatingOrder(true);
 
-      // Passa o ID se for delivery, ou NULL se for retirada na loja
+      refreshCart();
+
       const addressToLog =
         deliveryMethod === "delivery" ? selectedAddressId : null;
-
-      // Chama o backend
       await OrdersService.createOrder(addressToLog);
 
-      // Dispara a animação/modal de sucesso
       setShowSuccessModal(true);
     } catch (error: any) {
       Alert.alert(
@@ -274,7 +328,6 @@ export default function CheckoutScreen() {
                       ]}
                       onPress={() => setSelectedAddressId(address.id)}
                     >
-                      {/* Ícone de seleção (Radio) */}
                       <MaterialCommunityIcons
                         name={
                           selectedAddressId === address.id
@@ -286,14 +339,23 @@ export default function CheckoutScreen() {
                           selectedAddressId === address.id ? "#E31837" : "#999"
                         }
                       />
-
-                      {/* Container principal dos textos */}
                       <View style={styles.addressItemTextContainer}>
+                        {/* 🌟 NOVO: Exibição da Label (ex: "Casa", "Trabalho") */}
+                        {address.label && (
+                          <Text
+                            style={{
+                              fontSize: 14,
+                              fontWeight: "bold",
+                              color: "#333",
+                              marginBottom: 2,
+                            }}
+                          >
+                            {address.label}
+                          </Text>
+                        )}
+
                         <View
-                          style={{
-                            flexDirection: "row",
-                            alignItems: "center",
-                          }}
+                          style={{ flexDirection: "row", alignItems: "center" }}
                         >
                           <Text
                             style={[
@@ -304,7 +366,6 @@ export default function CheckoutScreen() {
                           >
                             {address.street}, {address.number}
                           </Text>
-
                           {address.is_default && (
                             <View style={styles.defaultBadge}>
                               <MaterialCommunityIcons
@@ -318,8 +379,6 @@ export default function CheckoutScreen() {
                             </View>
                           )}
                         </View>
-
-                        {/* Detalhes do endereço ficam logo abaixo */}
                         <Text style={styles.addressItemDetails}>
                           {address.neighborhood} - {address.city}/
                           {address.state}
@@ -417,10 +476,17 @@ export default function CheckoutScreen() {
           </View>
           <View style={styles.summaryRow}>
             <Text style={styles.summaryLabel}>Taxa de Entrega</Text>
-            <Text style={styles.summaryValue}>
+            <Text
+              style={[
+                styles.summaryValue,
+                currentDeliveryFee === -1 && { color: "#E31837" },
+              ]}
+            >
               {deliveryMethod === "pickup"
                 ? "Grátis"
-                : formatPrice(DELIVERY_FEE)}
+                : currentDeliveryFee === -1
+                  ? "Região não atendida"
+                  : formatPrice(currentDeliveryFee)}
             </Text>
           </View>
 
@@ -433,10 +499,13 @@ export default function CheckoutScreen() {
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.confirmButton, isCreatingOrder && { opacity: 0.7 }]}
+          style={[
+            styles.confirmButton,
+            (isCreatingOrder || currentDeliveryFee === -1) && { opacity: 0.7 },
+          ]}
           activeOpacity={0.8}
           onPress={handleConfirmOrder}
-          disabled={isCreatingOrder}
+          disabled={isCreatingOrder || currentDeliveryFee === -1}
         >
           {isCreatingOrder ? (
             <ActivityIndicator color="#FFF" />
@@ -485,7 +554,6 @@ export default function CheckoutScreen() {
               size={80}
               color="#4CAF50"
             />
-
             <Text
               style={{
                 fontSize: 24,
@@ -497,7 +565,6 @@ export default function CheckoutScreen() {
             >
               Pedido Confirmado!
             </Text>
-
             <Text
               style={{
                 fontSize: 16,
@@ -510,7 +577,6 @@ export default function CheckoutScreen() {
             >
               Recebemos seu pedido e já vamos começar a preparar.
             </Text>
-
             <TouchableOpacity
               style={{
                 backgroundColor: "#E31837",
@@ -522,6 +588,7 @@ export default function CheckoutScreen() {
               }}
               onPress={() => {
                 setShowSuccessModal(false);
+                refreshCart();
                 router.replace("/(tabs)/home");
               }}
             >

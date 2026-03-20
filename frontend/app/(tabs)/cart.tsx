@@ -8,22 +8,19 @@ import {
   Image,
   TextInput,
   Animated,
-  Dimensions,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Toast } from "@/util/toast";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
+// Importação correta (evita o erro de deprecated)
 import { Swipeable } from "react-native-gesture-handler";
 
 import { styles } from "../../styles/cart.styles";
 import { useCart } from "@/context/CartContext";
 import { CartItemWithProduct } from "@/types/cart";
 import { PriceSkeleton } from "@/components/PriceSkeleton";
-
-// Pegamos a largura da tela para saber o que é "arrastar até a metade"
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 const CartItemComponent = ({
   item,
@@ -53,18 +50,12 @@ const CartItemComponent = ({
   );
   const formattedItemTotal = currencyFormatter.format(itemTotalPrice);
 
-  // === UI DO FUNDO VERMELHO (REVELADA AO ARRASTAR) ===
+  // === UI DO FUNDO VERMELHO ===
   const renderRightActions = (progress: any, dragX: any) => {
-    // Opacidade aumenta conforme arrasta
+    // Opacidade suave ao começar a puxar (de 0 para 1)
     const opacity = dragX.interpolate({
-      inputRange: [-SCREEN_WIDTH / 2, -50, 0],
-      outputRange: [1, 0.5, 0],
-      extrapolate: "clamp",
-    });
-
-    const scale = dragX.interpolate({
-      inputRange: [-SCREEN_WIDTH / 2, -50, 0],
-      outputRange: [1.2, 0.8, 0],
+      inputRange: [-60, -10],
+      outputRange: [1, 0],
       extrapolate: "clamp",
     });
 
@@ -73,35 +64,35 @@ const CartItemComponent = ({
         <Animated.View
           style={{
             opacity,
-            transform: [{ scale }],
             alignItems: "center",
-            paddingRight: 30,
+            justifyContent: "center",
+            paddingRight: 24, // Dá um respiro pro ícone não ficar colado na borda
+            height: "100%",
           }}
         >
-          <Ionicons name="trash" size={32} color="#FFF" />
-          <Text style={styles.swipeDeleteText}>Solte para excluir</Text>
+          {/* Apenas a lixeira, tamanho fixo, sem textos */}
+          <Ionicons name="trash" size={26} color="#FFF" />
         </Animated.View>
       </View>
     );
   };
 
   return (
-    // Colocamos o Swipeable solto e a margem inferior (se houver) fora dele
     <View style={{ marginBottom: 15 }}>
       <Swipeable
         ref={swipeableRef}
         renderRightActions={renderRightActions}
-        friction={2}
-        // Exige arrastar +- 40% da tela para ativar a deleção
-        rightThreshold={SCREEN_WIDTH * 0.4}
-        // Quando passar do limite e abrir, deleta na hora!
+        // Friction menor deixa o card mais "leve" para puxar
+        friction={1.5}
+        // Reduzido para 80 pixels: um arrasto curto e rápido já ativa a exclusão!
+        rightThreshold={80}
+        // Animação final de fechar logo antes de deletar
         onSwipeableOpen={(direction) => {
           if (direction === "right") {
             removeItem(item.id);
           }
         }}
       >
-        {/* Usamos marginBottom: 0 aqui para o vermelho não vazar para a margem */}
         <View style={[styles.cartItem, { marginBottom: 0 }]}>
           <View style={styles.imageContainer}>
             {item.product.image_url ? (
@@ -192,7 +183,6 @@ const CartItemComponent = ({
                 )}
               </View>
 
-              {/* BOTÃO REMOVER ORIGINAL RESTAURADO! */}
               <TouchableOpacity
                 onPress={() => removeItem(item.id)}
                 style={styles.removeButton}
