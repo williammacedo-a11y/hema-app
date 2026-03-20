@@ -16,7 +16,7 @@ import { Product } from "@/types/product";
 import { getProductById, getSimilarProducts } from "@/services/products";
 import { styles } from "../../styles/product.styles";
 import { formatProductPrice } from "@/util/formatProductPrice";
-import Toast from "react-native-toast-message";
+import { Toast } from "@/util/toast";
 
 export default function ProductDetailsScreen() {
   const router = useRouter();

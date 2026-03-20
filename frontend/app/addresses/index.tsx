@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { getAddresses, deleteAddress, Address } from "@/services/addresses";
-import Toast from "react-native-toast-message";
+import { Toast } from "@/util/toast";
 
 export default function AddressesListScreen() {
   const router = useRouter();

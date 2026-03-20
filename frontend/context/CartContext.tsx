@@ -7,7 +7,7 @@ import React, {
   useCallback,
 } from "react";
 import * as cartService from "@/services/cart";
-import Toast from "react-native-toast-message";
+import { Toast } from "@/util/toast";
 
 type Cart = any;
 type CartItem = any;
@@ -18,7 +18,7 @@ type CartContextType = {
   loading: boolean;
   cartCount: number;
   refreshCart: () => Promise<void>;
-  addItem: (data: any) => Promise<void>;
+  addItem: (data: AddCartItemDTO) => Promise<void>;
   updateItem: (id: string, data: any) => Promise<void>;
   removeItem: (id: string) => Promise<void>;
 };
@@ -39,12 +39,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const cartCount = items.length;
 
-  // 🔹 REFRESH
+  // 🔹 REFRESH (Puxa os dados reais do banco)
   const refreshCart = useCallback(async () => {
     try {
       setLoading(true);
       const data = await cartService.getCartService();
-
       if (data) {
         setCart(data.cart || {});
         setItems(data.items || []);
@@ -56,33 +55,55 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // 🔹 ADD ITEM (Totalmente Otimista)
   const addItem = useCallback(
     async (data: AddCartItemDTO) => {
+      // 1. Guarda o estado antigo em caso de rollback
+      const previousItems = [...items];
+
+      // 2. Cria o item falso (Mock) para a UI reagir instantaneamente
       const tempItem = {
         id: `temp-${Date.now()}`,
         product_id: data.product_id,
         quantity: data.quantity || 0,
         weight: data.weight || 0,
-        product: {},
+        product: {}, // Lembre-se que sem os dados do produto, a imagem pode piscar no carrinho
       };
 
+      // 3. Atualiza a tela NA HORA (sem await)
       setItems((prev) => [...prev, tempItem]);
 
+      // IMPORTANTE: NÃO FAÇA TOAST AQUI!
+      // O Toast de sucesso já está sendo disparado no handleAddToCart (HomeScreen) instantaneamente.
+
       try {
+        // 4. Manda pro servidor de forma assíncrona
         await cartService.addCartItemService(data);
-        await refreshCart();
+
+        // 5. Depois que salvou em background, atualiza o ID real e valores em silêncio
+        const dataFromServer = await cartService.getCartService();
+        if (dataFromServer) {
+          setCart(dataFromServer.cart || {});
+          setItems(dataFromServer.items || []);
+        }
       } catch (err) {
-        // Em caso de erro, removemos o item temporário recarregando o carrinho real
-        await refreshCart();
+        // Se deu erro, reverte a tela pro que era antes
+        setItems(previousItems);
+        // O Toast de erro já está sendo tratado no catch da tela que chamou a função!
         console.error("Erro ao adicionar item", err);
         throw err;
       }
     },
-    [refreshCart],
+    [items], // Adicionei items como dependência para o rollback funcionar
   );
 
+  // 🔹 UPDATE ITEM (Otimista)
   const updateItem = useCallback(
     async (id: string, data: { quantity?: number; weight?: number }) => {
+      const previousItems = [...items];
+      const previousCart = cart;
+
+      // Atualiza a tela na hora (não bloqueia a renderização)
       setItems((currentItems) =>
         currentItems.map((item) =>
           item.id === id ? { ...item, ...data } : item,
@@ -90,65 +111,67 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       );
 
       try {
-        setLoading(true);
+        // Não seto loading=true aqui para não piscar a tela do usuário
         await cartService.updateCartItemService(id, data);
 
+        // Atualiza os totais (preço) em background
         const res = await cartService.getCartService();
         if (res) {
           setCart(res.cart);
           setItems(res.items || []);
         }
       } catch (err) {
-        // Recarrega o estado real em caso de erro
-        const res = await cartService.getCartService();
-        if (res) {
-          setCart(res.cart);
-          setItems(res.items || []);
-        }
+        // Rollback
+        setItems(previousItems);
+        setCart(previousCart);
+        Toast.show({ type: "error", text1: "Erro ao atualizar quantidade." });
         console.error("Erro ao atualizar item", err);
-      } finally {
-        setLoading(false);
       }
     },
-    [],
+    [items, cart],
   );
 
+  // 🔹 REMOVE ITEM (Otimista)
   const removeItem = useCallback(
     async (id: string) => {
+      const previousItems = [...items];
+      const previousCart = cart;
+
+      // Remove da tela no exato momento que clicou (ou que puxou o swipe)
       setItems((currentItems) => currentItems.filter((item) => item.id !== id));
 
+      // O Toast agora entra aqui, instantaneamente!
+      Toast.show({ type: "success", text1: "Removido com sucesso!" });
+
       try {
-        setLoading(true);
+        // Faz a exclusão real no banco
         await cartService.removeCartItemService(id);
 
-        Toast.show({ type: "success", text1: "Removido com sucesso!" });
-
+        // Atualiza o subtotal do carrinho
         const res = await cartService.getCartService();
         if (res) {
           setCart(res.cart);
-          setItems(res.items || []);
+          // Só atualiza os itens se vieram do servidor, senão mantém a otimista
+          if (res.items) setItems(res.items);
         }
       } catch (err) {
-        // Recarrega o estado real em caso de erro
-        const res = await cartService.getCartService();
-        if (res) {
-          setCart(res.cart);
-          setItems(res.items || []);
-        }
+        // Se a internet cair, o item volta pra tela e avisa o usuário
+        setItems(previousItems);
+        setCart(previousCart);
+        Toast.show({
+          type: "error",
+          text1: "Não foi possível remover o item.",
+        });
         console.error("Erro ao remover item", err);
-      } finally {
-        setLoading(false);
       }
     },
-    [],
+    [items, cart],
   );
 
-  // 🔹 INITIAL LOAD
   useEffect(() => {
     refreshCart();
   }, [refreshCart]);
 
-  // 🔹 MEMO DO CONTEXTO
   const value = useMemo(
     () => ({
       cart,
@@ -177,10 +200,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
 export function useCart() {
   const context = useContext(CartContext);
-
   if (!context) {
     throw new Error("useCart deve ser usado dentro de CartProvider");
   }
-
   return context;
 }

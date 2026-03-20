@@ -18,7 +18,6 @@ export function ProductCard({
   onAdd,
   isCarousel = false,
 }: ProductCardProps) {
-  // LÓGICA DO PREÇO: Verifica se é por peso ou unidade
   const isKg =
     product.price_per_kg !== null && product.price_per_kg !== undefined;
   const displayPrice = isKg ? product.price_per_kg : product.price;

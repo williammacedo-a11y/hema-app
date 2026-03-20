@@ -10,7 +10,7 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Toast from "react-native-toast-message";
+import { Toast } from "@/util/toast";
 
 import { getProductsByCategory } from "@/services/products";
 import { ProductCard } from "@/components/ProductCard";

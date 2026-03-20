@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
-  StyleSheet,
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -14,6 +13,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { styles } from "@/styles/orders.styles";
 
 import { OrdersService } from "@/services/orders";
+import { Toast } from "@/util/toast";
 
 export default function OrderDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -29,7 +29,12 @@ export default function OrderDetailsScreen() {
       setOrder(data);
     } catch (error) {
       console.error("Erro ao carregar pedido:", error);
-      Alert.alert("Erro", "Não foi possível carregar os detalhes do pedido.");
+      // Trocando o Alert antigo por um Toast de erro
+      Toast.show({
+        type: "error",
+        text1: "Ops!",
+        text2: "Não foi possível carregar o pedido.",
+      });
       router.back();
     } finally {
       setLoading(false);
@@ -41,6 +46,7 @@ export default function OrderDetailsScreen() {
   }, [id]);
 
   const handleCancelOrder = () => {
+    // Mantemos o Alert apenas para a pergunta de confirmação (Sim/Não)
     Alert.alert(
       "Cancelar Pedido",
       "Tem certeza que deseja cancelar este pedido?",
@@ -53,13 +59,22 @@ export default function OrderDetailsScreen() {
             try {
               setCanceling(true);
               await OrdersService.cancelOrder(id);
-              Alert.alert("Sucesso", "Seu pedido foi cancelado.");
+
+              // SUBSTITUÍDO: Toast de Sucesso no lugar do Alert
+              Toast.show({
+                type: "success",
+                text1: "Pedido Cancelado",
+                text2: "O seu pedido foi cancelado com sucesso.",
+              });
+
               fetchOrderDetails(); // Recarrega para atualizar o status na tela
             } catch (error: any) {
-              Alert.alert(
-                "Erro",
-                error.message || "Não foi possível cancelar.",
-              );
+              // SUBSTITUÍDO: Toast de Erro no lugar do Alert
+              Toast.show({
+                type: "error",
+                text1: "Erro ao cancelar",
+                text2: error.message || "Tente novamente mais tarde.",
+              });
             } finally {
               setCanceling(false);
             }

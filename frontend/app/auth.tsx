@@ -16,7 +16,7 @@ import { Stack } from "expo-router";
 import { styles } from "../styles/auth.styles";
 import { login, signup } from "../services/auth";
 import { View as MotiView, Text as MotiText, AnimatePresence } from "moti";
-import Toast from "react-native-toast-message";
+import { Toast } from "@/util/toast";
 
 if (
   Platform.OS === "android" &&

@@ -88,7 +88,20 @@ export const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-
+  // NOVOS ESTILOS PARA O SWIPE TO DELETE
+  swipeDeleteAction: {
+    flex: 1, // Preenche todo o espaço gerado ao arrastar, mantendo a altura exata do card vizinho
+    backgroundColor: "#E31837", // Fundo vermelho
+    justifyContent: "center",
+    alignItems: "flex-end", // Alinha a lixeira à direita para aparecer logo que começa a puxar
+    borderRadius: 10, // Acompanha a borda do seu cartItem
+  },
+  swipeDeleteText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "bold",
+    marginTop: 4,
+  },
   // --- CONTROLE DE UNIDADE (+ / -) ---
   quantityContainer: {
     flexDirection: "row",

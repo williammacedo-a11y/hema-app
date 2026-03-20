@@ -3,29 +3,34 @@ import { StyleSheet, Platform } from "react-native";
 export const cardStyles = StyleSheet.create({
   productCard: {
     backgroundColor: "#FFFFFF",
-    borderRadius: 10,
+    borderRadius: 12, // Um pouco mais arredondado fica mais moderno
     overflow: "hidden",
     flex: 1,
+    // A borda sutil é o segredo para o card não "sumir" se o fundo do app for muito claro
+    borderWidth: 1,
+    borderColor: "#EAEAEA",
     ...Platform.select({
       ios: {
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 4 }, // Aumentei um pouco a altura da sombra
+        shadowOpacity: 0.06, // Sombra mais transparente e elegante
+        shadowRadius: 8,
       },
       android: {
-        elevation: 3,
+        elevation: 2, // Reduzi um pouco para não ficar grosseiro com a borda
       },
     }),
   },
   carouselWidth: {
-    width: 155,
-    marginBottom: 10,
+    width: 175,
+    marginBottom: 0,
   },
   imageContainer: {
     width: "100%",
     height: 130,
     backgroundColor: "#F9F9F9",
+    borderBottomWidth: 1, // Uma linha sutil separando a foto das informações
+    borderBottomColor: "#F0F0F0",
   },
   productImage: {
     width: "100%",
@@ -39,42 +44,42 @@ export const cardStyles = StyleSheet.create({
     backgroundColor: "#F5F5F5",
   },
   productInfo: {
-    padding: 10,
-    paddingBottom: 4,
+    padding: 12, // Um respiro maior nas laterais
+    paddingBottom: 8,
     flex: 1,
     justifyContent: "space-between",
   },
   productName: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#1A1A1A",
+    color: "#222222", // Um preto um pouquinho mais suave que o 1A1A1A
     lineHeight: 18,
-    marginBottom: 4,
+    marginBottom: 6,
     minHeight: 36,
   },
   productPrice: {
-    fontSize: 15,
+    fontSize: 16, // Destaque maior para o preço
     fontWeight: "800",
     color: "#E31837",
-    marginBottom: 8,
+    marginBottom: 10,
   },
   priceUnit: {
     fontSize: 11,
     fontWeight: "600",
-    color: "#999",
+    color: "#888",
   },
   discreteAddButton: {
-    paddingVertical: 8,
+    paddingVertical: 10, // Botão um pouco mais gordinho = melhor área de clique
     paddingHorizontal: 10,
-    marginBottom: 6,
+    marginBottom: 4,
     backgroundColor: "#E31837",
-    borderRadius: 18,
+    borderRadius: 8, // Mais quadrado com bordas arredondadas (combina melhor com card de produto)
     alignItems: "center",
     justifyContent: "center",
   },
   discreteAddButtonText: {
     fontSize: 13,
-    fontWeight: "700",
+    fontWeight: "800",
     color: "#ffffff",
     textTransform: "uppercase",
   },

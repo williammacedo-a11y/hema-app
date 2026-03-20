@@ -10,7 +10,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import Toast from "react-native-toast-message";
+import { Toast } from "@/util/toast";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { styles } from "@/styles/home.styles";
@@ -26,7 +26,7 @@ const SEARCH_LIMIT = 20;
 
 export default function HomeScreen() {
   const router = useRouter();
-  const { catalog, loading, refreshing, onRefresh, userName } = useHomeData();
+  const { catalog, refreshing, onRefresh } = useHomeData();
   const { addItem } = useCart();
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -39,10 +39,14 @@ export default function HomeScreen() {
 
   const handleAddToCart = async (product: Product) => {
     try {
+      const isKg =
+        product.price_per_kg !== null && product.price_per_kg !== undefined;
+      const isUnit = product.type === "unit" || !isKg;
+
       const payload = {
         product_id: product.id,
-        price: product.type === "unit" ? product.price : product.price_per_kg,
-        ...(product.type === "unit" ? { quantity: 1 } : { weight: 50 }),
+        price: isUnit ? product.price : product.price_per_kg,
+        ...(isUnit ? { quantity: 1 } : { weight: 50 }),
       };
 
       Toast.show({
@@ -50,6 +54,7 @@ export default function HomeScreen() {
         text1: "Produto adicionado ao carrinho!",
         text2: `${product.name} foi salvo.`,
       });
+
       await addItem(payload);
     } catch (error) {
       Toast.show({

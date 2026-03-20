@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import Toast from "react-native-toast-message";
+import { Toast } from "@/util/toast";
 import {
   getAddresses,
   getAddressByCep,
