@@ -159,45 +159,12 @@ export default function CartScreen() {
     }, []),
   );
 
-  function handleWeightChange(item: CartItemWithProduct, newWeight: string) {
-    // Converte o texto para número
-    const numericWeight = parseInt(newWeight.replace(/[^0-9]/g, "")) || 0;
-
-    // Atualiza no context (você pode validar o mínimo de 50g aqui ou no blur)
-    updateItem(item.id, { weight: numericWeight });
-  }
-
   function validateWeight(weight: number) {
     if (weight < 50) {
       Toast.show({ type: "error", text1: "O peso mínimo é de 50g" });
       return false;
     }
     return true;
-  }
-  
-  function updateQuantity(
-    item: CartItemWithProduct,
-    action: "increase" | "decrease",
-  ) {
-    if (item.product.type === "unit") {
-      // ... lógica de unidade (mantém igual)
-      const currentQty = item.quantity || 0;
-      const newQuantity =
-        action === "increase" ? currentQty + 1 : Math.max(1, currentQty - 1);
-      updateItem(item.id, { quantity: newQuantity });
-    } else {
-      const currentWeight = item.weight || 0;
-
-      if (action === "decrease" && currentWeight <= 50) {
-        validateWeight(0);
-        return;
-      }
-
-      const newWeight =
-        action === "increase" ? currentWeight + 50 : currentWeight - 50;
-
-      updateItem(item.id, { weight: newWeight });
-    }
   }
 
   const renderCartItem = ({ item }: { item: CartItemWithProduct }) => {

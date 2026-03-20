@@ -15,7 +15,7 @@ import { logout } from "../../services/auth";
 import { router } from "expo-router";
 
 const MENU_OPTIONS = [
-  { id: "1", title: "Meus Pedidos", route: "" },
+  { id: "1", title: "Meus Pedidos", route: "/orders" },
   { id: "2", title: "Endereço de Entrega", route: "/addresses" },
   { id: "3", title: "Formas de Pagamento", route: "" },
   { id: "4", title: "Meus Dados", route: "" },

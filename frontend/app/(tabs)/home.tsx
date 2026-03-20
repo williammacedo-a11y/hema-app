@@ -20,6 +20,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { useCart } from "@/context/CartContext";
 import { Product } from "@/types/product";
 import { searchProducts } from "@/services/search";
+import { CategoryCarousel } from "@/components/CategoryCarousel";
 
 const SEARCH_LIMIT = 20;
 
@@ -123,6 +124,9 @@ export default function HomeScreen() {
           />
         }
       >
+        {/* CARROUSSEL DE CATEGORIAS */}
+        <CategoryCarousel />
+
         {isSearching ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#E31837" />

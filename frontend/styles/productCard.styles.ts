@@ -20,7 +20,6 @@ export const cardStyles = StyleSheet.create({
   },
   carouselWidth: {
     width: 155,
-    marginTop: 10,
     marginBottom: 10,
   },
   imageContainer: {
@@ -69,7 +68,7 @@ export const cardStyles = StyleSheet.create({
     paddingHorizontal: 10,
     marginBottom: 6,
     backgroundColor: "#E31837",
-    borderRadius: 6,
+    borderRadius: 18,
     alignItems: "center",
     justifyContent: "center",
   },

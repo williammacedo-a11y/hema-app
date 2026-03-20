@@ -51,7 +51,7 @@ export const styles = StyleSheet.create({
   },
   // --- SEÇÕES E CARROSSÉIS (Seu original) ---
   sectionContainer: {
-    marginBottom: 24,
+    marginBottom: 0,
     paddingHorizontal: 0,
   },
   sectionHeader: {

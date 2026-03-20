@@ -28,7 +28,7 @@ export class SearchService {
 
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('ERRO DO SUPABASE:', errorData); // Isso ajuda a debugar se der erro de novo
+        console.error('ERRO DO SUPABASE:', errorData); 
         throw new HttpException(errorData, response.status);
       }
 

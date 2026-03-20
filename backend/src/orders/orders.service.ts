@@ -1,104 +1,155 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { supabase } from 'src/lib/supabase'; // Importando o seu client!
+import { supabase } from 'src/lib/supabase';
 
 @Injectable()
 export class OrdersService {
   // Criar o registro na 'orders' e os itens na 'order_items'
   async createOrder(userId: string, dto: CreateOrderDto) {
     try {
-      // 1. Buscar os produtos no banco para pegar os PREÇOS REAIS
-      const productIds = dto.items.map((i) => i.product_id);
+      // 1. Buscar o carrinho do usuário, os itens e os dados reais dos produtos em UMA query
+      const { data: cart, error: cartError } = await supabase
+        .from('carts')
+        .select(
+          `
+          id, 
+          total_price,
+          cart_items (
+            product_id,
+            quantity, 
+            weight, 
+            products (
+              name, 
+              type, 
+              price, 
+              price_per_kg
+            )
+          )
+        `,
+        )
+        .eq('user_id', userId)
+        .single();
 
-      // Usando o client do Supabase (muito mais limpo!)
-      const { data: products, error: productsError } = await supabase
-        .from('products')
-        .select('id, name, price, price_per_kg, type')
-        .in('id', productIds);
-
-      if (productsError || !products || products.length === 0) {
+      if (
+        cartError ||
+        !cart ||
+        !cart.cart_items ||
+        cart.cart_items.length === 0
+      ) {
         throw new HttpException(
-          'Produtos enviados são inválidos ou não encontrados.',
+          'Carrinho vazio ou não encontrado.',
           HttpStatus.BAD_REQUEST,
         );
       }
 
-      // 2. Calcular Totais e Preparar os Itens para Inserção
-      let totalPrice = 0;
-      const deliveryFee = 12.5; // Fixo por enquanto
+      // 2. Calcular o frete e o total final
+      const isDelivery = !!dto.address_id;
+      const deliveryFee = isDelivery ? 12.5 : 0;
 
-      const orderItemsData = dto.items.map((item) => {
-        const product = products.find((p) => p.id === item.product_id);
-        if (!product) {
-          throw new HttpException(
-            `Produto ${item.product_id} não encontrado`,
-            HttpStatus.BAD_REQUEST,
-          );
-        }
+      let calculatedTotal = 0;
 
+      const orderItemsToInsert = cart.cart_items.map((item: any) => {
+        const product = item.products;
         const isUnit = product.type === 'unit';
         const price = isUnit ? product.price : product.price_per_kg;
 
-        // Se for unidade, multiplica pela quantia. Se for peso, divide por 1000 (assumindo gramas)
         const subtotal = isUnit
           ? price * (item.quantity || 1)
           : price * ((item.weight || 0) / 1000);
 
-        totalPrice += subtotal;
+        calculatedTotal += subtotal;
 
         return {
-          product_id: product.id,
+          product_id: item.product_id,
           product_name: product.name,
           product_price: price,
-          quantity: isUnit ? item.quantity || 1 : null,
-          weight: !isUnit ? item.weight || 0 : null,
+          quantity: isUnit ? item.quantity : null,
+          weight: !isUnit ? item.weight : null,
           subtotal: Number(subtotal.toFixed(2)),
         };
       });
 
-      const finalTotalPrice = Number((totalPrice + deliveryFee).toFixed(2));
+      const finalTotalPrice = Number(
+        (calculatedTotal + deliveryFee).toFixed(2),
+      );
 
-      // 3. Inserir na tabela 'orders' e RETORNAR o objeto criado
       const { data: newOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
           user_id: userId,
-          address_id: dto.address_id,
-          status: 'pending_payment',
+          address_id: dto.address_id || null,
+          status: 'pending',
           total_price: finalTotalPrice,
           delivery_fee: deliveryFee,
         })
-        .select() // Equivalente ao Prefer: return=representation
-        .single(); // Garante que retorna apenas o objeto, não um array
+        .select()
+        .single();
 
       if (orderError || !newOrder) {
-        console.error('Erro ao criar pedido:', orderError);
+        console.error('Erro na Order:', orderError);
         throw new HttpException(
-          'Erro ao criar o pedido principal',
+          'Erro ao gerar pedido',
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
 
-      // 4. Inserir os itens na tabela 'order_items' com o novo order_id
-      const itemsToInsert = orderItemsData.map((item) => ({
+      // 4. Inserir os itens na tabela 'order_items'
+      const itemsWithOrderId = orderItemsToInsert.map((item) => ({
         ...item,
         order_id: newOrder.id,
       }));
 
-      const { error: itemsError } = await supabase
-        .from('order_items')
-        .insert(itemsToInsert); // Bulk insert nativo!
+      let itemsInserted = false;
+      let attempts = 0;
+      const maxRetries = 2;
 
-      if (itemsError) {
-        console.error('Erro ao inserir itens:', itemsError);
-        // Em um cenário ideal, se falhar aqui, você deveria deletar a order criada acima (Rollback manual)
+      while (attempts <= maxRetries && !itemsInserted) {
+        const { error: itemsError } = await supabase
+          .from('order_items')
+          .insert(itemsWithOrderId);
+
+        if (!itemsError) {
+          itemsInserted = true;
+        } else {
+          attempts++;
+          console.warn(
+            `[Order ${newOrder.id}] Falha ao inserir itens (Tentativa ${attempts}/${maxRetries + 1}):`,
+            itemsError,
+          );
+
+          if (attempts <= maxRetries) {
+            await new Promise((resolve) => setTimeout(resolve, 500));
+          }
+        }
+      }
+
+      if (!itemsInserted) {
+        console.error(
+          `🚨 Iniciando ROLLBACK: Deletando a order ${newOrder.id} órfã...`,
+        );
+
+        // ROLLBACK: Deleta a Order que foi criada no passo 3
+        const { error: rollbackError } = await supabase
+          .from('orders')
+          .delete()
+          .eq('id', newOrder.id);
+
+        if (rollbackError) {
+          console.error(
+            `🚨 ALERTA CRÍTICO: Falha no rollback da order ${newOrder.id}!`,
+            rollbackError,
+          );
+        }
+
         throw new HttpException(
-          'Erro ao salvar os itens do pedido',
-          HttpStatus.INTERNAL_SERVER_ERROR,
+          'Tivemos um problema de conexão ao finalizar seu pedido. Por favor, tente novamente mais tarde ou contate nosso suporte.',
+          HttpStatus.SERVICE_UNAVAILABLE,
         );
       }
 
-      // Tudo deu certo!
+      await supabase.from('cart_items').delete().eq('cart_id', cart.id);
+      await supabase.from('carts').update({ total_price: 0 }).eq('id', cart.id);
+
       return {
         message: 'Pedido criado com sucesso!',
         order_id: newOrder.id,
@@ -108,7 +159,7 @@ export class OrdersService {
     } catch (error) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
-        'Erro interno ao criar pedido',
+        'Erro interno ao processar checkout',
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -116,23 +167,144 @@ export class OrdersService {
 
   // Buscar todos os pedidos simplificados para a lista do App
   async findAllByUser(userId: string) {
-    // TODO: Buscar na tabela 'orders' filtrando por user_id
-    // Dica: Ordenar pelo 'created_at' decrescente
-    return [];
+    const { data, error } = await supabase
+      .from('orders')
+      .select(
+        `
+        *,
+        order_items (
+          id,
+          product_name,
+          quantity,
+          weight,
+          subtotal
+        )
+      `,
+      )
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false }); // Mais recentes primeiro
+
+    if (error) {
+      throw new HttpException(
+        'Erro ao buscar histórico',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+
+    return data;
   }
 
   // Buscar detalhes de um pedido + seus itens (Join)
   async findOne(userId: string, orderId: string) {
-    // TODO: Buscar na 'orders' e fazer o join com 'order_items'
-    // Importante: Validar se o orderId pertence ao userId enviado
-    return {};
+    try {
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select(
+          `
+          *,
+          order_items (
+            id,
+            product_id,
+            product_name,
+            product_price,
+            quantity,
+            weight,
+            subtotal
+          ),
+          addresses (
+            label,
+            street,
+            number,
+            complement,
+            neighborhood,
+            city,
+            state,
+            zip_code
+          )
+        `,
+        )
+        .eq('id', orderId)
+        .eq('user_id', userId)
+        .single();
+
+      if (error || !order) {
+        throw new HttpException(
+          'Pedido não encontrado ou você não tem permissão para acessá-lo.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      return order;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+
+      console.error(`Erro ao buscar detalhes do pedido ${orderId}:`, error);
+      throw new HttpException(
+        'Erro interno ao buscar os detalhes do pedido',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   // Lógica de cancelamento (Update de Status)
   async cancelOrder(userId: string, orderId: string) {
-    // TODO: 1. Verificar se o status atual permite cancelamento
-    // TODO: 2. Atualizar status para 'cancelled'
-    return { message: 'Pedido cancelado' };
+    try {
+      // 1. Buscar o pedido para checar o status e garantir que pertence ao usuário
+      const { data: order, error: fetchError } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', orderId)
+        .eq('user_id', userId)
+        .single();
+
+      // Se não achar, ou é um ID inválido ou o usuário tá tentando cancelar o pedido de outra pessoa
+      if (fetchError || !order) {
+        throw new HttpException(
+          'Pedido não encontrado ou acesso negado.',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      // 2. Verificar se o status atual permite cancelamento
+      // Deixei em um array porque no futuro você pode adicionar 'aguardando_pagamento' aqui
+      const cancelableStatuses = ['pending'];
+
+      if (!cancelableStatuses.includes(order.status)) {
+        throw new HttpException(
+          `Não é possível cancelar este pedido pois ele já está em processamento. (Status: ${order.status})`,
+          HttpStatus.CONFLICT,
+        );
+      }
+
+      // 3. Atualizar status para 'cancelled'
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId)
+        .eq('user_id', userId);
+
+      if (updateError) {
+        console.error(`Erro ao cancelar pedido ${orderId}:`, updateError);
+        throw new HttpException(
+          'Erro ao processar o cancelamento do pedido.',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+
+      return {
+        message: 'Pedido cancelado com sucesso.',
+        order_id: orderId,
+        new_status: 'cancelled',
+      };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+
+      console.error(`Erro inesperado ao cancelar pedido ${orderId}:`, error);
+      throw new HttpException(
+        'Erro interno ao cancelar o pedido.',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   // Função interna para ser usada pelo Webhook de Pagamento amanhã

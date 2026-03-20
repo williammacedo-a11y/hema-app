@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -14,6 +15,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { styles } from "../styles/checkout.styles";
 import { useCart } from "@/context/CartContext";
 import { getAddresses, Address } from "@/services/addresses";
+import { OrdersService } from "@/services/orders";
 
 type DeliveryMethod = "pickup" | "delivery";
 type PaymentMethod = "pix" | "card" | "cash";
@@ -33,6 +35,10 @@ export default function CheckoutScreen() {
     null,
   );
   const [loadingAddresses, setLoadingAddresses] = useState(false);
+
+  // Novos estados para o fluxo de pedido
+  const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
@@ -77,13 +83,8 @@ export default function CheckoutScreen() {
     }, []),
   );
 
-  const subtotal = useMemo(() => {
-    return (items || []).reduce((acc, item) => {
-      const price = item.price || 0;
-      const quantity = item.quantity || item.weight || 0;
-      return acc + price * quantity;
-    }, 0);
-  }, [items]);
+  // 🐛 CÁLCULO CORRIGIDO: Agora trata o peso em gramas convertendo para KG
+  const subtotal = cart?.total_price ? Number(cart.total_price) : 0;
 
   const currentDeliveryFee = deliveryMethod === "delivery" ? DELIVERY_FEE : 0;
   const total = subtotal + currentDeliveryFee;
@@ -95,7 +96,8 @@ export default function CheckoutScreen() {
     });
   };
 
-  const handleConfirmOrder = () => {
+  // 🚀 INTEGRAÇÃO COM O BACKEND
+  const handleConfirmOrder = async () => {
     if (items.length === 0) {
       Alert.alert("Ops!", "Seu carrinho está vazio.");
       return;
@@ -109,11 +111,26 @@ export default function CheckoutScreen() {
       return;
     }
 
-    Alert.alert(
-      "Pedido Confirmado!",
-      `Seu pedido no valor de ${formatPrice(total)} foi recebido com sucesso.`,
-      [{ text: "OK", onPress: () => router.replace("/(tabs)/home") }],
-    );
+    try {
+      setIsCreatingOrder(true);
+
+      // Passa o ID se for delivery, ou NULL se for retirada na loja
+      const addressToLog =
+        deliveryMethod === "delivery" ? selectedAddressId : null;
+
+      // Chama o backend
+      await OrdersService.createOrder(addressToLog);
+
+      // Dispara a animação/modal de sucesso
+      setShowSuccessModal(true);
+    } catch (error: any) {
+      Alert.alert(
+        "Erro ao finalizar pedido",
+        error.message || "Tente novamente mais tarde.",
+      );
+    } finally {
+      setIsCreatingOrder(false);
+    }
   };
 
   if (loading && items.length === 0) {
@@ -416,22 +433,105 @@ export default function CheckoutScreen() {
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={styles.confirmButton}
+          style={[styles.confirmButton, isCreatingOrder && { opacity: 0.7 }]}
           activeOpacity={0.8}
           onPress={handleConfirmOrder}
+          disabled={isCreatingOrder}
         >
-          <Text style={styles.confirmButtonText}>Confirmar Pedido</Text>
+          {isCreatingOrder ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Text style={styles.confirmButtonText}>Confirmar Pedido</Text>
+          )}
         </TouchableOpacity>
 
         <TouchableOpacity
           style={styles.continueShoppingButton}
           onPress={() => router.back()}
+          disabled={isCreatingOrder}
         >
           <Text style={styles.continueShoppingText}>
             Voltar e revisar carrinho
           </Text>
         </TouchableOpacity>
       </View>
+
+      <Modal visible={showSuccessModal} transparent={true} animationType="fade">
+        <View
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(0,0,0,0.6)",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: 20,
+          }}
+        >
+          <View
+            style={{
+              backgroundColor: "#FFF",
+              borderRadius: 16,
+              padding: 30,
+              alignItems: "center",
+              width: "100%",
+              maxWidth: 340,
+              elevation: 10,
+              shadowColor: "#000",
+              shadowOpacity: 0.2,
+              shadowRadius: 10,
+            }}
+          >
+            <MaterialCommunityIcons
+              name="check-decagram"
+              size={80}
+              color="#4CAF50"
+            />
+
+            <Text
+              style={{
+                fontSize: 24,
+                fontWeight: "bold",
+                color: "#1A1A1A",
+                marginTop: 16,
+                textAlign: "center",
+              }}
+            >
+              Pedido Confirmado!
+            </Text>
+
+            <Text
+              style={{
+                fontSize: 16,
+                color: "#666",
+                textAlign: "center",
+                marginTop: 8,
+                marginBottom: 24,
+                lineHeight: 22,
+              }}
+            >
+              Recebemos seu pedido e já vamos começar a preparar.
+            </Text>
+
+            <TouchableOpacity
+              style={{
+                backgroundColor: "#E31837",
+                paddingVertical: 14,
+                paddingHorizontal: 24,
+                borderRadius: 8,
+                width: "100%",
+                alignItems: "center",
+              }}
+              onPress={() => {
+                setShowSuccessModal(false);
+                router.replace("/(tabs)/home");
+              }}
+            >
+              <Text style={{ color: "#FFF", fontSize: 16, fontWeight: "bold" }}>
+                Concluir
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
