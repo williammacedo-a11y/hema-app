@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   StatusBar,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -18,10 +19,11 @@ export default function AddressesListScreen() {
   const router = useRouter();
   const [addresses, setAddresses] = useState<Address[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchAddresses = async () => {
+  const fetchAddresses = async (showCentralLoading = true) => {
     try {
-      setLoading(true);
+      if (showCentralLoading) setLoading(true);
       const data = await getAddresses();
       setAddresses(data);
     } catch (error) {
@@ -33,20 +35,26 @@ export default function AddressesListScreen() {
       });
     } finally {
       setLoading(false);
+      setRefreshing(false); // Garante que o spinner de topo pare
     }
+  };
+
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchAddresses(false);
   };
 
   useFocusEffect(
     useCallback(() => {
       fetchAddresses();
-    }, [])
+    }, []),
   );
 
   const handleDelete = (id: string, is_default: boolean) => {
     if (is_default) {
       Alert.alert(
         "Atenção",
-        "Você não pode excluir o endereço padrão. Defina outro como padrão primeiro."
+        "Você não pode excluir o endereço padrão. Defina outro como padrão primeiro.",
       );
       return;
     }
@@ -72,7 +80,7 @@ export default function AddressesListScreen() {
             }
           },
         },
-      ]
+      ],
     );
   };
 
@@ -92,15 +100,42 @@ export default function AddressesListScreen() {
         elevation: 2,
       }}
     >
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: 8,
+        }}
+      >
         <View style={{ flex: 1, paddingRight: 10 }}>
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
-            <Text style={{ fontSize: 16, fontWeight: "bold", color: "#111827" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              marginBottom: 4,
+            }}
+          >
+            <Text
+              style={{ fontSize: 16, fontWeight: "bold", color: "#111827" }}
+            >
               {item.label || "Meu Endereço"}
             </Text>
             {item.is_default && (
-              <View style={{ backgroundColor: "#FEF2F2", paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12, marginLeft: 8 }}>
-                <Text style={{ fontSize: 10, color: "#E31837", fontWeight: "600" }}>PADRÃO</Text>
+              <View
+                style={{
+                  backgroundColor: "#FEF2F2",
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 12,
+                  marginLeft: 8,
+                }}
+              >
+                <Text
+                  style={{ fontSize: 10, color: "#E31837", fontWeight: "600" }}
+                >
+                  PADRÃO
+                </Text>
               </View>
             )}
           </View>
@@ -127,7 +162,11 @@ export default function AddressesListScreen() {
             onPress={() => handleDelete(item.id, item.is_default)}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Ionicons name="trash-outline" size={20} color={item.is_default ? "#D1D5DB" : "#EF4444"} />
+            <Ionicons
+              name="trash-outline"
+              size={20}
+              color={item.is_default ? "#D1D5DB" : "#EF4444"}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -135,18 +174,37 @@ export default function AddressesListScreen() {
   );
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#F9FAFB" }} edges={["top"]}>
+    <SafeAreaView
+      style={{ flex: 1, backgroundColor: "#F9FAFB" }}
+      edges={["top"]}
+    >
       <StatusBar barStyle="dark-content" />
-      <View style={{ flexDirection: "row", alignItems: "center", padding: 16, borderBottomWidth: 1, borderBottomColor: "#E5E7EB", backgroundColor: "#fff" }}>
-        <TouchableOpacity onPress={() => router.back()} style={{ marginRight: 16 }}>
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          padding: 16,
+          borderBottomWidth: 1,
+          borderBottomColor: "#E5E7EB",
+          backgroundColor: "#fff",
+        }}
+      >
+        <TouchableOpacity
+          onPress={() => router.back()}
+          style={{ marginRight: 16 }}
+        >
           <Ionicons name="arrow-back" size={24} color="#111827" />
         </TouchableOpacity>
-        <Text style={{ fontSize: 18, fontWeight: "bold", color: "#111827" }}>Meus Endereços</Text>
+        <Text style={{ fontSize: 18, fontWeight: "bold", color: "#111827" }}>
+          Meus Endereços
+        </Text>
       </View>
 
       <View style={{ flex: 1, padding: 16 }}>
         {loading ? (
-          <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+          <View
+            style={{ flex: 1, justifyContent: "center", alignItems: "center" }}
+          >
             <ActivityIndicator size="large" color="#E31837" />
           </View>
         ) : (
@@ -156,10 +214,32 @@ export default function AddressesListScreen() {
             renderItem={renderAddress}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: 100 }}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={["#E31837"]}
+                tintColor="#E31837"
+              />
+            }
             ListEmptyComponent={
-              <View style={{ flex: 1, alignItems: "center", justifyContent: "center", marginTop: 40 }}>
+              <View
+                style={{
+                  flex: 1,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginTop: 40,
+                }}
+              >
                 <Ionicons name="location-outline" size={64} color="#D1D5DB" />
-                <Text style={{ fontSize: 16, color: "#6B7280", marginTop: 16, textAlign: "center" }}>
+                <Text
+                  style={{
+                    fontSize: 16,
+                    color: "#6B7280",
+                    marginTop: 16,
+                    textAlign: "center",
+                  }}
+                >
                   Você ainda não tem nenhum endereço de entrega cadastrado.
                 </Text>
               </View>
@@ -168,13 +248,31 @@ export default function AddressesListScreen() {
         )}
       </View>
 
-      <View style={{ position: "absolute", bottom: 0, left: 0, right: 0, padding: 16, backgroundColor: "#F9FAFB", borderTopWidth: 1, borderTopColor: "#E5E7EB" }}>
+      <View
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: 0,
+          right: 0,
+          padding: 16,
+          backgroundColor: "#F9FAFB",
+          borderTopWidth: 1,
+          borderTopColor: "#E5E7EB",
+        }}
+      >
         <TouchableOpacity
-          style={{ backgroundColor: "#E31837", padding: 16, borderRadius: 12, alignItems: "center" }}
+          style={{
+            backgroundColor: "#E31837",
+            padding: 16,
+            borderRadius: 12,
+            alignItems: "center",
+          }}
           onPress={() => router.push("/addresses/new" as any)}
           activeOpacity={0.8}
         >
-          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}>+ Adicionar Novo Endereço</Text>
+          <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}>
+            + Adicionar Novo Endereço
+          </Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

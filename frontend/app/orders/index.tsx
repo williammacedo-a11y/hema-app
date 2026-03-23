@@ -22,8 +22,9 @@ export default function OrdersListScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const fetchOrders = async () => {
+  const fetchOrders = async (isInitial = false) => {
     try {
+      if (isInitial) setLoading(true); 
       const data = await OrdersService.getUserOrders();
       setOrders(data);
     } catch (error) {
@@ -36,13 +37,13 @@ export default function OrdersListScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      fetchOrders();
+      fetchOrders(true);
     }, []),
   );
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchOrders();
+    fetchOrders(false);
   };
 
   const formatPrice = (price: number) => {

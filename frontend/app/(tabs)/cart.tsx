@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,20 +8,22 @@ import {
   Image,
   TextInput,
   Animated,
+  RefreshControl,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Toast } from "@/util/toast";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
-// Importação correta (evita o erro de deprecated)
 import { Swipeable } from "react-native-gesture-handler";
 
 import { styles } from "../../styles/cart.styles";
 import { useCart } from "@/context/CartContext";
 import { CartItemWithProduct } from "@/types/cart";
+import { CartItemSkeleton } from "@/components/CartItemSkeleton";
 import { PriceSkeleton } from "@/components/PriceSkeleton";
 
+// --- CART ITEM COMPONENT ---
 const CartItemComponent = ({
   item,
   updateItem,
@@ -50,9 +52,7 @@ const CartItemComponent = ({
   );
   const formattedItemTotal = currencyFormatter.format(itemTotalPrice);
 
-  // === UI DO FUNDO VERMELHO ===
   const renderRightActions = (progress: any, dragX: any) => {
-    // Opacidade suave ao começar a puxar (de 0 para 1)
     const opacity = dragX.interpolate({
       inputRange: [-60, -10],
       outputRange: [1, 0],
@@ -66,11 +66,10 @@ const CartItemComponent = ({
             opacity,
             alignItems: "center",
             justifyContent: "center",
-            paddingRight: 24, // Dá um respiro pro ícone não ficar colado na borda
+            paddingRight: 24,
             height: "100%",
           }}
         >
-          {/* Apenas a lixeira, tamanho fixo, sem textos */}
           <Ionicons name="trash" size={26} color="#FFF" />
         </Animated.View>
       </View>
@@ -82,11 +81,8 @@ const CartItemComponent = ({
       <Swipeable
         ref={swipeableRef}
         renderRightActions={renderRightActions}
-        // Friction menor deixa o card mais "leve" para puxar
         friction={1.5}
-        // Reduzido para 80 pixels: um arrasto curto e rápido já ativa a exclusão!
         rightThreshold={80}
-        // Animação final de fechar logo antes de deletar
         onSwipeableOpen={(direction) => {
           if (direction === "right") {
             removeItem(item.id);
@@ -122,7 +118,6 @@ const CartItemComponent = ({
             <View style={styles.itemFooter}>
               <View style={styles.qtyLabelContainer}>
                 {item.product.type === "unit" ? (
-                  // BOTOES DE UNIDADE
                   <View style={styles.quantityContainer}>
                     <TouchableOpacity
                       onPress={() =>
@@ -151,7 +146,6 @@ const CartItemComponent = ({
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  // INPUT DE PESO
                   <View style={styles.weightEditContainer}>
                     <TextInput
                       ref={inputRef}
@@ -198,16 +192,44 @@ const CartItemComponent = ({
   );
 };
 
+// --- CART SCREEN ---
 export default function CartScreen() {
   const { removeItem, updateItem, refreshCart, items, cart, loading } =
     useCart();
   const router = useRouter();
+
+  const [refreshing, setRefreshing] = useState(false);
+  const [isCalculating, setIsCalculating] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       refreshCart();
     }, []),
   );
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refreshCart();
+    setRefreshing(false);
+  };
+
+  const handleRemoveItem = async (id: string) => {
+    setIsCalculating(true);
+    try {
+      await removeItem(id);
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  const handleUpdateItem = async (id: string, data: any) => {
+    setIsCalculating(true);
+    try {
+      await updateItem(id, data);
+    } finally {
+      setIsCalculating(false);
+    }
+  };
 
   function validateWeight(weight: number) {
     if (weight < 50) {
@@ -217,12 +239,18 @@ export default function CartScreen() {
     return true;
   }
 
-  const renderCartItem = ({ item }: { item: CartItemWithProduct }) => {
+  const showListSkeleton = (loading && items.length === 0) || refreshing;
+  const showPriceSkeleton = loading || refreshing || isCalculating;
+
+  const renderCartItem = ({ item }: any) => {
+    if (showListSkeleton) {
+      return <CartItemSkeleton />;
+    }
     return (
       <CartItemComponent
         item={item}
-        updateItem={updateItem}
-        removeItem={removeItem}
+        updateItem={handleUpdateItem} 
+        removeItem={handleRemoveItem} 
         validateWeight={validateWeight}
       />
     );
@@ -234,29 +262,47 @@ export default function CartScreen() {
         <StatusBar barStyle="dark-content" />
 
         <View style={styles.container}>
-          {/* Header */}
           <View style={styles.header}>
             <Text style={styles.headerTitle}>Meu Carrinho</Text>
           </View>
 
+          {/* 🚀 MÁGICA NA FLATLIST: Não desmontamos ela, só trocamos os dados */}
           <FlatList
-            data={items}
+            data={showListSkeleton ? [1, 2, 3] : items}
             renderItem={renderCartItem}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item, index) =>
+              showListSkeleton ? `skel-${index}` : item.id
+            }
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={showListSkeleton ? ["transparent"] : ["#E31837"]}
+                tintColor={showListSkeleton ? "transparent" : "#E31837"}
+              />
+            }
             ListEmptyComponent={
-              <Text style={styles.emptyCartText}>Seu carrinho está vazio.</Text>
+              showListSkeleton ? null : (
+                <View style={{ alignItems: "center", marginTop: 60 }}>
+                  <Ionicons name="cart-outline" size={64} color="#DDD" />
+                  <Text style={[styles.emptyCartText, { marginTop: 10 }]}>
+                    Seu carrinho está vazio.
+                  </Text>
+                </View>
+              )
             }
           />
 
           {/* Resumo e Botão Finalizar */}
-          {items.length > 0 && (
+          {items.length > 0 && !showListSkeleton && (
             <View style={styles.footerContainer}>
               <View style={styles.subtotalRow}>
                 <Text style={styles.subtotalLabel}>Subtotal</Text>
 
-                {loading ? (
+                {/* 🚀 SKELETON DO SUBTOTAL COM ISCALCULATING */}
+                {showPriceSkeleton ? (
                   <PriceSkeleton />
                 ) : (
                   <Text style={styles.subtotalValue}>
@@ -269,9 +315,13 @@ export default function CartScreen() {
               </View>
 
               <TouchableOpacity
-                style={styles.checkoutButton}
+                style={[
+                  styles.checkoutButton,
+                  showPriceSkeleton && { opacity: 0.7 },
+                ]}
                 activeOpacity={0.8}
                 onPress={() => router.push("/checkout")}
+                disabled={showPriceSkeleton} // Evita finalizar compra enquanto recalcula
               >
                 <Text style={styles.checkoutButtonText}>Finalizar Compra</Text>
               </TouchableOpacity>

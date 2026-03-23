@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   View,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 
 import { useCart } from "@/context/CartContext";
@@ -17,6 +18,7 @@ import { getProductById, getSimilarProducts } from "@/services/products";
 import { styles } from "../../styles/product.styles";
 import { formatProductPrice } from "@/util/formatProductPrice";
 import { Toast } from "@/util/toast";
+import { ProductDetailsSkeleton } from "@/components/ProductDetailSkeleton";
 
 export default function ProductDetailsScreen() {
   const router = useRouter();
@@ -26,37 +28,47 @@ export default function ProductDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [similarProducts, setSimilarProducts] = useState<Product[]>([]);
   const [showFullDescription, setShowFullDescription] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  async function fetchData() {
+    if (!id) return;
+    const [productData, similarData] = await Promise.all([
+      getProductById(id),
+      getSimilarProducts(id),
+    ]);
+
+    if (productData) setProduct(productData);
+    setSimilarProducts(similarData);
+  }
 
   useEffect(() => {
-    async function loadData() {
-      if (!id) return;
+    async function initialLoad() {
       setLoading(true);
-
-      const [productData, similarData] = await Promise.all([
-        getProductById(id),
-        getSimilarProducts(id),
-      ]);
-
-      if (productData) {
-        setProduct(productData);
-      }
-      setSimilarProducts(similarData);
+      await fetchData();
       setLoading(false);
     }
-
-    loadData();
+    initialLoad();
   }, [id]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await fetchData(); // Recarrega os dados sem mostrar o loader de tela cheia
+    setRefreshing(false);
+  };
 
   if (loading) {
     return (
-      <View
-        style={[
-          styles.safeArea,
-          { justifyContent: "center", alignItems: "center" },
-        ]}
-      >
-        <ActivityIndicator size="large" color="#E31837" />
-      </View>
+      <>
+        {/* Mantemos o botão de voltar funcional por cima do skeleton */}
+        <TouchableOpacity
+          style={[styles.header, { backgroundColor: "#FFF" }]}
+          onPress={() => router.back()}
+        >
+          <Ionicons name="arrow-back" size={24} color="#333" />
+        </TouchableOpacity>
+
+        <ProductDetailsSkeleton />
+      </>
     );
   }
 
@@ -96,7 +108,6 @@ export default function ProductDetailsScreen() {
       });
 
       await addItem(payload);
-
     } catch (error) {
       Toast.show({
         type: "error",
@@ -119,6 +130,14 @@ export default function ProductDetailsScreen() {
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#E31837"]}
+            tintColor="#E31837"
+          />
+        }
       >
         {/* IMAGEM DO PRODUTO */}
         <View style={styles.imageContainer}>

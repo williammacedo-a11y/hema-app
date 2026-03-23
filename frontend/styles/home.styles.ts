@@ -11,7 +11,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#fff",
   },
-  // --- HEADER & SEARCH BAR (Mesclado e Corrigido) ---
+  // --- HEADER & SEARCH BAR ---
   headerContainer: {
     paddingHorizontal: 16,
     paddingTop: 5,
@@ -49,7 +49,7 @@ export const styles = StyleSheet.create({
   iconButton: {
     padding: 4,
   },
-  // --- SEÇÕES E CARROSSÉIS (Seu original) ---
+  // --- SEÇÕES E CARROSSÉIS ---
   sectionContainer: {
     marginBottom: 0,
     paddingHorizontal: 0,
@@ -58,7 +58,6 @@ export const styles = StyleSheet.create({
     marginBottom: 16,
     marginTop: 16,
     marginHorizontal: 18,
-    display: "flex",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -67,19 +66,21 @@ export const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "700",
     color: "#1A1A1A",
-    margin: 16,
+    marginHorizontal: 18,
+    marginTop: 16,
+    marginBottom: 10,
   },
   horizontalListContent: {
     paddingRight: 8,
     paddingLeft: 18,
   },
-  // --- ESTILOS DA GRADE DE RESULTADOS E FEEDBACK ---
+  // --- GRADE DE RESULTADOS ---
   gridContainer: {
     flexDirection: "row",
     flexWrap: "wrap",
-    justifyContent: "space-around",
+    justifyContent: "space-between",
     marginTop: 10,
-    paddingHorizontal: 24,
+    paddingHorizontal: 18,
   },
   gridItem: {
     width: "48%",
@@ -91,20 +92,47 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     paddingTop: 40,
   },
-  loadingText: {
-    marginTop: 12,
-    color: "#666",
-    fontSize: 14,
-    fontWeight: "500",
-  },
   emptyContainer: {
     alignItems: "center",
     justifyContent: "center",
-    paddingTop: 40,
+    paddingTop: 60,
   },
   emptyText: {
     marginTop: 12,
     color: "#999",
     fontSize: 15,
+  },
+  loadMoreButton: {
+    backgroundColor: "#FFF",
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 100, // Deixa ele arredondado, estilo iFood
+    borderWidth: 1,
+    borderColor: "#E31837", // Borda vermelha para destaque
+    marginTop: 10,
+    marginBottom: 20,
+  },
+  loadMoreText: {
+    color: "#E31837",
+    fontWeight: "bold",
+    fontSize: 14,
+  },
+  // --- SKELETONS ---
+  skeletonRow: {
+    flexDirection: "row",
+    paddingLeft: 18,
+    gap: 12,
+    marginBottom: 24,
+  },
+  skeletonGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    marginTop: 20,
+  },
+  skeletonGridItem: {
+    width: "48%",
+    marginBottom: 16,
   },
 });

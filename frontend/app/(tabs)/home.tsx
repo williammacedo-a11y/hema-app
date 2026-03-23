@@ -3,10 +3,10 @@ import {
   View,
   ScrollView,
   StatusBar,
-  ActivityIndicator,
   Text,
   RefreshControl,
   TouchableOpacity,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
@@ -21,6 +21,7 @@ import { useCart } from "@/context/CartContext";
 import { Product } from "@/types/product";
 import { searchProducts } from "@/services/search";
 import { CategoryCarousel } from "@/components/CategoryCarousel";
+import { ProductCardSkeleton } from "@/components/ProductCardSkeleton";
 
 const SEARCH_LIMIT = 20;
 
@@ -78,7 +79,6 @@ export default function HomeScreen() {
       setIsSearching(true);
       const results = await searchProducts(query, SEARCH_LIMIT, 0);
       setSearchResults(results);
-
       setSearchOffset(0);
       setHasMoreSearch(results.length === SEARCH_LIMIT);
     } catch (err) {
@@ -94,7 +94,6 @@ export default function HomeScreen() {
     try {
       setIsSearchingMore(true);
       const nextOffset = searchOffset + SEARCH_LIMIT;
-
       const results = await searchProducts(
         searchQuery,
         SEARCH_LIMIT,
@@ -103,7 +102,6 @@ export default function HomeScreen() {
 
       setSearchResults((prev) => [...prev, ...results]);
       setSearchOffset(nextOffset);
-
       setHasMoreSearch(results.length === SEARCH_LIMIT);
     } catch (err) {
       console.error("Erro ao carregar mais resultados:", err);
@@ -125,21 +123,27 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            colors={["#E31837"]}
+            // Se quiser que o ícone de loading "suma" ou fique discreto:
+            colors={refreshing && catalog ? ["transparent"] : ["#E31837"]}
+            tintColor={refreshing && catalog ? "transparent" : "#E31837"}
           />
         }
       >
-        {/* CARROUSSEL DE CATEGORIAS */}
         <CategoryCarousel />
 
+        {/* 1. LOADING DA BUSCA (SKELETON EM GRADE) */}
         {isSearching ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#E31837" />
-            <Text style={styles.loadingText}>Buscando produtos...</Text>
+          <View style={styles.skeletonGrid}>
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <View key={i} style={styles.skeletonGridItem}>
+                <ProductCardSkeleton />
+              </View>
+            ))}
           </View>
         ) : searchQuery.trim() !== "" ? (
+          /* 2. EXIBIÇÃO DOS RESULTADOS DA BUSCA */
           <View style={styles.sectionContainer}>
-            {/* 1. LÓGICA DE VERIFICAÇÃO DE SCORE */}
+            {/* Cabeçalho de Feedback da Busca */}
             {searchResults.length > 0 &&
             (searchResults[0].similarity_score ?? 0) < 0.3 ? (
               <View style={{ marginBottom: 10 }}>
@@ -150,6 +154,7 @@ export default function HomeScreen() {
                   style={{
                     fontSize: 14,
                     color: "#666",
+                    marginHorizontal: 18,
                     marginTop: -10,
                     marginBottom: 10,
                   }}
@@ -157,13 +162,13 @@ export default function HomeScreen() {
                   Mas separamos algumas sugestões parecidas para você:
                 </Text>
               </View>
-            ) : (
+            ) : searchResults.length > 0 ? (
               <Text style={styles.sectionTitle}>
                 Resultados para "{searchQuery}"
               </Text>
-            )}
+            ) : null}
 
-            {/* 2. RENDERIZAÇÃO DA GRADE (continua igualzinho) */}
+            {/* Caso não encontre NADA */}
             {searchResults.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <MaterialCommunityIcons
@@ -175,6 +180,7 @@ export default function HomeScreen() {
               </View>
             ) : (
               <>
+                {/* Grade de Produtos */}
                 <View style={styles.gridContainer}>
                   {searchResults.map((product, index) => (
                     <View
@@ -194,32 +200,19 @@ export default function HomeScreen() {
                     </View>
                   ))}
                 </View>
-                {/* 3. Botão de Mostrar Mais */}
+
+                {/* 🚀 O BOTÃO VOLTOU AQUI: */}
                 {hasMoreSearch && (
-                  <View style={{ paddingVertical: 20, alignItems: "center" }}>
+                  <View style={{ paddingVertical: 30, alignItems: "center" }}>
                     {isSearchingMore ? (
                       <ActivityIndicator size="small" color="#E31837" />
                     ) : (
                       <TouchableOpacity
                         onPress={loadMoreSearchResults}
-                        style={{
-                          backgroundColor: "#F5F5F5",
-                          paddingVertical: 12,
-                          paddingHorizontal: 24,
-                          borderRadius: 8,
-                          borderWidth: 1,
-                          borderColor: "#EAEAEA",
-                        }}
+                        style={styles.loadMoreButton}
+                        activeOpacity={0.7}
                       >
-                        <Text
-                          style={{
-                            color: "#E31837",
-                            fontWeight: "600",
-                            fontSize: 14,
-                          }}
-                        >
-                          Mostrar Mais
-                        </Text>
+                        <Text style={styles.loadMoreText}>Mostrar Mais</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -227,8 +220,30 @@ export default function HomeScreen() {
               </>
             )}
           </View>
+        ) : !catalog || refreshing ? (
+          <View style={{ marginTop: 20 }}>
+            {[1, 2].map((row) => (
+              <View key={row}>
+                <View
+                  style={{
+                    height: 20,
+                    width: 150,
+                    backgroundColor: "#F0F0F0",
+                    marginLeft: 18,
+                    marginBottom: 15,
+                    borderRadius: 4,
+                  }}
+                />
+                <View style={styles.skeletonRow}>
+                  {[1, 2, 3].map((i) => (
+                    <ProductCardSkeleton key={i} isCarousel={true} />
+                  ))}
+                </View>
+              </View>
+            ))}
+          </View>
         ) : (
-          // CATÁLOGO NORMAL
+          /* 3. CONTEÚDO REAL DO CATÁLOGO (Só aparece quando catalog existe e refreshing é false) */
           catalog?.map((category) => {
             if (!category.products || category.products.length === 0)
               return null;

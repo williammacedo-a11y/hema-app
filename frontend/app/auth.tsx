@@ -49,7 +49,6 @@ export default function AuthScreen() {
 
     try {
       await login(email, password);
-      // O _layout.tsx detectará a sessão e fará o redirecionamento automático
     } catch (err: any) {
       Toast.show({
         type: "error",
@@ -72,7 +71,6 @@ export default function AuthScreen() {
 
     try {
       await signup(email, password, name);
-      // O _layout.tsx detectará a sessão e fará o redirecionamento automático
     } catch (err: any) {
       Toast.show({
         type: "error",
@@ -178,10 +176,8 @@ export default function AuthScreen() {
               />
             </View>
 
-            {/* O espaço do Checkbox foi removido. Um pequeno margin top para separar do input de senha. */}
             <View style={{ marginTop: 24 }} />
 
-            {/* Botão Principal com Loading */}
             <TouchableOpacity
               style={[styles.primaryButton, isLoading && { opacity: 0.7 }]}
               activeOpacity={0.8}

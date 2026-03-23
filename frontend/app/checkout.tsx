@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Modal,
+  RefreshControl,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -47,69 +48,60 @@ function calculateDeliveryFee(city?: string): number {
 export default function CheckoutScreen() {
   const router = useRouter();
   const { items, loading, cart, refreshCart } = useCart();
-
-  const [deliveryMethod, setDeliveryMethod] =
-    useState<DeliveryMethod>("delivery");
+  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("delivery");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
-
   const [addresses, setAddresses] = useState<Address[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
-    null,
-  );
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
-
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const loadData = async () => {
+    try {
+      // 1. Atualiza o carrinho para garantir que preços/itens estão batendo
+      await refreshCart();
+
+      // 2. Busca os endereços
+      const data = await getAddresses();
+      setAddresses(data);
+
+      // 3. Lógica de seleção automática (já existia no seu código)
+      setSelectedAddressId((currentSelectedId) => {
+        if (currentSelectedId) return currentSelectedId;
+        if (data.length > 0) {
+          const defaultAddr = data.find((a) => a.is_default);
+          return defaultAddr ? defaultAddr.id : data[0].id;
+        }
+        return null;
+      });
+    } catch (error) {
+      console.error("Erro ao carregar dados do checkout:", error);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
-      let isActive = true;
-
-      const loadAddresses = async () => {
-        setLoadingAddresses((prev) => addresses.length === 0);
-        try {
-          const data = await getAddresses();
-          if (isActive) {
-            setAddresses(data);
-            setSelectedAddressId((currentSelectedId) => {
-              if (currentSelectedId) return currentSelectedId;
-              if (data.length > 0) {
-                const defaultAddr = data.find((a) => a.is_default);
-                return defaultAddr ? defaultAddr.id : data[0].id;
-              }
-              return null;
-            });
-          }
-        } catch (error) {
-          console.error("Erro ao buscar endereços:", error);
-          if (isActive) {
-            Alert.alert("Erro", "Não foi possível carregar seus endereços.");
-          }
-        } finally {
-          if (isActive) setLoadingAddresses(false);
-        }
-      };
-
-      loadAddresses();
-
-      return () => {
-        isActive = false;
-      };
+      setLoadingAddresses(addresses.length === 0);
+      loadData().finally(() => setLoadingAddresses(false));
     }, []),
   );
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadData();
+    setRefreshing(false);
+  };
+
   const subtotal = cart?.total_price ? Number(cart.total_price) : 0;
 
-  // Encontra o endereço selecionado completo para ler a cidade
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
 
-  // Calcula o frete: 0 se for retirada, senão calcula com base na cidade
   const currentDeliveryFee = useMemo(() => {
     if (deliveryMethod === "pickup") return 0;
     return calculateDeliveryFee(selectedAddress?.city);
   }, [deliveryMethod, selectedAddress]);
 
-  // Se o frete for -1, significa erro. Assumimos 0 na soma visual, mas travamos o botão lá embaixo.
   const displayDeliveryFee = currentDeliveryFee === -1 ? 0 : currentDeliveryFee;
   const total = subtotal + displayDeliveryFee;
 
@@ -120,9 +112,6 @@ export default function CheckoutScreen() {
     });
   };
 
-  // ==========================================
-  // NOVO: AVISO INSTANTÂNEO DE REGIÃO INVÁLIDA
-  // ==========================================
   React.useEffect(() => {
     if (
       deliveryMethod === "delivery" &&
@@ -211,6 +200,14 @@ export default function CheckoutScreen() {
         style={styles.container}
         contentContainerStyle={styles.contentPadding}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#E31837"]}
+            tintColor="#E31837"
+          />
+        }
       >
         {/* 1. MÉTODO DE ENTREGA */}
         <View style={styles.section}>
@@ -497,6 +494,7 @@ export default function CheckoutScreen() {
         </View>
       </ScrollView>
 
+      {/* 4. FOOTER */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={[

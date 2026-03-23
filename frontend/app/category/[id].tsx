@@ -6,6 +6,8 @@ import {
   ActivityIndicator,
   TouchableOpacity,
   StatusBar,
+  RefreshControl,
+  ScrollView,
 } from "react-native";
 import { useLocalSearchParams, useRouter, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,8 +15,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Toast } from "@/util/toast";
 
 import { getProductsByCategory } from "@/services/products";
-import { ProductCard } from "@/components/ProductCard";
 import { Product } from "@/types/product";
+import { ProductCard } from "@/components/ProductCard";
+import { ProductCardSkeleton } from "@/components/ProductCardSkeleton";
 import { styles } from "@/styles/category.styles";
 import { useCart } from "@/context/CartContext";
 
@@ -24,10 +27,10 @@ export default function CategoryScreen() {
   const router = useRouter();
   const { addItem } = useCart();
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
-
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
@@ -46,6 +49,21 @@ export default function CategoryScreen() {
     }
     loadInitialProducts();
   }, [id]);
+
+  const onRefresh = async () => {
+    if (!id) return;
+    setRefreshing(true);
+    try {
+      const data = await getProductsByCategory(id, LIMIT, 0);
+      setProducts(data);
+      setOffset(0);
+      setHasMore(data.length === LIMIT);
+    } catch (error) {
+      console.error("Erro ao atualizar categoria:", error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const loadMoreProducts = async () => {
     if (!hasMore || loadingMore || !id) return;
@@ -135,11 +153,22 @@ export default function CategoryScreen() {
         <Text style={styles.headerTitle}>{name}</Text>
       </View>
 
+      {/* AQUI ENTRA O SKELETON */}
       {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#E31837" />
-        </View>
+        <ScrollView
+          style={{ flex: 1, width: "100%" }}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.skeletonGrid}>
+            {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+              <View key={i} style={styles.skeletonGridItem}>
+                <ProductCardSkeleton />
+              </View>
+            ))}
+          </View>
+        </ScrollView>
       ) : (
+        /* SUA FLATLIST REAL AQUI */
         <FlatList
           style={{ flex: 1, width: "100%" }}
           data={products}
@@ -148,6 +177,14 @@ export default function CategoryScreen() {
           contentContainerStyle={styles.listContent}
           columnWrapperStyle={styles.columnWrapper}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={["#E31837"]}
+              tintColor="#E31837"
+            />
+          }
           renderItem={({ item }) => (
             <View style={styles.cardWrapper}>
               <ProductCard

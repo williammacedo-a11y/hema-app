@@ -4,12 +4,12 @@ import {
   Text,
   TouchableOpacity,
   Switch,
-  StyleSheet,
   Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { styles } from "@/styles/profile.styles";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -84,44 +84,3 @@ export default function SettingsScreen() {
     </SafeAreaView>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#F8F8F8" },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: 16,
-    backgroundColor: "#FFF",
-    borderBottomWidth: 1,
-    borderBottomColor: "#EEE",
-  },
-  backBtn: { padding: 8 },
-  title: { fontSize: 18, fontWeight: "bold", color: "#1A1A1A" },
-  content: { flex: 1, padding: 20 },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#666",
-    marginBottom: 10,
-    textTransform: "uppercase",
-  },
-  card: {
-    backgroundColor: "#FFF",
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    marginBottom: 24,
-    borderWidth: 1,
-    borderColor: "#EEE",
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F5F5F5",
-  },
-  rowText: { fontSize: 16, color: "#333" },
-  version: { textAlign: "center", color: "#999", marginTop: 40 },
-});

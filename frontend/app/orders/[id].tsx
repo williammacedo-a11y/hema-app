@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Alert,
+  RefreshControl,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
@@ -22,14 +23,15 @@ export default function OrderDetailsScreen() {
   const [order, setOrder] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const fetchOrderDetails = async () => {
+  const fetchOrderDetails = async (isInitial = true) => {
     try {
+      if (isInitial) setLoading(true); // Só ativa o loader central se for a primeira carga
       const data = await OrdersService.getOrderDetails(id);
       setOrder(data);
     } catch (error) {
       console.error("Erro ao carregar pedido:", error);
-      // Trocando o Alert antigo por um Toast de erro
       Toast.show({
         type: "error",
         text1: "Ops!",
@@ -38,15 +40,20 @@ export default function OrderDetailsScreen() {
       router.back();
     } finally {
       setLoading(false);
+      setRefreshing(false); // Garante que o spinner de topo pare
     }
   };
 
   useEffect(() => {
-    fetchOrderDetails();
+    fetchOrderDetails(true);
   }, [id]);
 
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchOrderDetails(false);
+  };
+
   const handleCancelOrder = () => {
-    // Mantemos o Alert apenas para a pergunta de confirmação (Sim/Não)
     Alert.alert(
       "Cancelar Pedido",
       "Tem certeza que deseja cancelar este pedido?",
@@ -132,7 +139,17 @@ export default function OrderDetailsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={["#E31837"]}
+            tintColor="#E31837"
+          />
+        }
+      >
         {/* RESUMO DO STATUS */}
         <View style={styles.section}>
           <Text style={styles.orderIdTitle}>

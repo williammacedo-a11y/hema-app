@@ -1,34 +1,14 @@
-import React, { useEffect, useRef } from "react";
-import { Animated } from "react-native";
+import React from "react";
+import { PulseView } from "./PulseView"; 
 
 export const PriceSkeleton = () => {
-  const opacityAnim = useRef(new Animated.Value(0.3)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacityAnim, {
-          toValue: 0.7,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityAnim, {
-          toValue: 0.3,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
-  }, [opacityAnim]);
-
   return (
-    <Animated.View
+    <PulseView
       style={{
-        opacity: opacityAnim,
-        width: 100, // Largura aproximada de um preço
-        height: 24, // Altura do texto do preço
-        backgroundColor: "#E0E0E0",
+        width: 100, 
+        height: 24, 
         borderRadius: 6,
+        backgroundColor: "#E0E0E0", 
       }}
     />
   );

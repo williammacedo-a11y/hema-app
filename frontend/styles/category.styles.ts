@@ -71,4 +71,15 @@ export const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 24,
   },
+  skeletonGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+    paddingHorizontal: 16, // Mesmo padding horizontal da sua lista real
+    paddingTop: 16, // Um respiro no topo para não colar no header
+  },
+  skeletonGridItem: {
+    width: "48%", // Força 2 colunas
+    marginBottom: 16, // Espaço vertical entre as linhas de skeletons
+  },
 });

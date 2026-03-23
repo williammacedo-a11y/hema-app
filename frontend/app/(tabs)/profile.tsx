@@ -16,7 +16,7 @@ import { router } from "expo-router";
 
 const MENU_OPTIONS = [
   { id: "1", title: "Meus Pedidos", route: "/orders" },
-  { id: "2", title: "Endereço de Entrega", route: "/addresses" },
+  { id: "2", title: "Endereços de Entrega", route: "/addresses" },
   { id: "3", title: "Formas de Pagamento", route: "payment_coming_soon" },
   { id: "4", title: "Meus Dados", route: "/profile/details" },
   { id: "5", title: "Configurações", route: "/profile/settings" },
