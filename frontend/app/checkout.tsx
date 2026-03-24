@@ -48,10 +48,13 @@ function calculateDeliveryFee(city?: string): number {
 export default function CheckoutScreen() {
   const router = useRouter();
   const { items, loading, cart, refreshCart } = useCart();
-  const [deliveryMethod, setDeliveryMethod] = useState<DeliveryMethod>("delivery");
+  const [deliveryMethod, setDeliveryMethod] =
+    useState<DeliveryMethod>("delivery");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
   const [addresses, setAddresses] = useState<Address[]>([]);
-  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
+    null,
+  );
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -146,7 +149,6 @@ export default function CheckoutScreen() {
         return;
       }
 
-      // Validação visual extra antes de bater no backend
       if (currentDeliveryFee === -1) {
         Alert.alert(
           "Região não atendida",
@@ -159,13 +161,29 @@ export default function CheckoutScreen() {
     try {
       setIsCreatingOrder(true);
 
-      refreshCart();
-
       const addressToLog =
         deliveryMethod === "delivery" ? selectedAddressId : null;
-      await OrdersService.createOrder(addressToLog);
 
-      setShowSuccessModal(true);
+      const result = await OrdersService.createOrder({
+        address_id: addressToLog,
+        payment_method: paymentMethod,
+      });
+
+      // limpa carrinho só depois que deu certo
+      await refreshCart();
+
+      if (paymentMethod === "cash") {
+        setShowSuccessModal(true);
+      } else {
+        router.push({
+          pathname: "/payment/[id]",
+          params: {
+            id: result.order_id,
+            method: paymentMethod,
+            total: result.total_price,
+          },
+        });
+      }
     } catch (error: any) {
       Alert.alert(
         "Erro ao finalizar pedido",

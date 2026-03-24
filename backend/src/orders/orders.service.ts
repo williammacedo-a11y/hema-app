@@ -1,61 +1,31 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { supabase } from 'src/lib/supabase';
-import { calculateDeliveryFee, DELIVERY_RULES } from '../utils/delivery.util';
+import { calculateDeliveryFee } from '../utils/delivery.util';
+import { processPayment } from '../payments/payment.service';
+import { CartService } from '../cart/cart.service';
 
 @Injectable()
 export class OrdersService {
+  constructor(private readonly cartService: CartService) {}
   // Criar o registro na 'orders' e os itens na 'order_items'
   async createOrder(userId: string, dto: CreateOrderDto) {
     try {
-      const { data: cart, error: cartError } = await supabase
-        .from('carts')
-        .select(
-          `
-          id, 
-          total_price,
-          cart_items (
-            product_id,
-            quantity, 
-            weight, 
-            products (
-              name, 
-              type, 
-              price, 
-              price_per_kg
-            )
-          )
-        `,
-        )
-        .eq('user_id', userId)
-        .single();
-
-      if (
-        cartError ||
-        !cart ||
-        !cart.cart_items ||
-        cart.cart_items.length === 0
-      ) {
+      // 1. Buscar o carrinho do usuário
+      const cartData = await this.cartService.getCart(userId);
+      if (!cartData.cart || cartData.items.length === 0) {
         throw new HttpException(
           'Carrinho vazio ou não encontrado.',
           HttpStatus.BAD_REQUEST,
         );
       }
 
+      const { cart, items: cartItems } = cartData;
       const isDelivery = !!dto.address_id;
-
-      // 2. Calcular o Peso Total (Corrigido: iterando sobre cart.cart_items)
-      let totalWeightGrams = 0;
-      cart.cart_items.forEach((item: any) => {
-        totalWeightGrams += item.weight || 0;
-      });
-      const totalWeightKg = totalWeightGrams / 1000;
 
       // 3. Lógica de Frete e Validações de Regras de Negócio
       let deliveryFee = 0;
-
       if (isDelivery) {
-        // Precisamos buscar a cidade do endereço escolhido
         const { data: address, error: addressError } = await supabase
           .from('addresses')
           .select('city')
@@ -71,27 +41,19 @@ export class OrdersService {
 
         deliveryFee = calculateDeliveryFee(address.city);
 
-        // Bloqueio 1: Região não atendida
         if (deliveryFee === -1) {
           throw new HttpException(
             'Não realizamos entregas para esta região. Selecione a opção "Retirar na loja".',
             HttpStatus.BAD_REQUEST,
           );
         }
-
-        // Bloqueio 2: Peso excedido para entrega
-        if (totalWeightKg > DELIVERY_RULES.MAX_WEIGHT_KG) {
-          throw new HttpException(
-            `O peso máximo para entrega é ${DELIVERY_RULES.MAX_WEIGHT_KG}kg. Seu pedido possui ${totalWeightKg.toFixed(2)}kg.`,
-            HttpStatus.BAD_REQUEST,
-          );
-        }
       }
 
+      // 4. Calcular os subtotais dos itens
       let calculatedTotal = 0;
 
-      const orderItemsToInsert = cart.cart_items.map((item: any) => {
-        const product = item.products;
+      const orderItemsToInsert = cartItems.map((item: any) => {
+        const product = item.product;
         const isUnit = product.type === 'unit';
         const price = isUnit ? product.price : product.price_per_kg;
 
@@ -102,7 +64,7 @@ export class OrdersService {
         calculatedTotal += subtotal;
 
         return {
-          product_id: item.product_id,
+          product_id: product.id,
           product_name: product.name,
           product_price: price,
           quantity: isUnit ? item.quantity : null,
@@ -115,26 +77,30 @@ export class OrdersService {
         (calculatedTotal + deliveryFee).toFixed(2),
       );
 
+      // 6. Insere o pedido principal (Order)
       const { data: newOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
           user_id: userId,
           address_id: dto.address_id || null,
-          status: 'pending',
+          status: 'pending', // Chumbado: acabou de nascer, tá pendente
+          payment_status: 'pending',
           total_price: finalTotalPrice,
           delivery_fee: deliveryFee,
+          payment_method: dto.payment_method,
         })
         .select()
         .single();
 
       if (orderError || !newOrder) {
-        console.error('Erro na Order:', orderError);
+        console.error('Erro ao gerar a order principal:', orderError);
         throw new HttpException(
-          'Erro ao gerar pedido',
+          'Erro interno ao gerar pedido.',
           HttpStatus.INTERNAL_SERVER_ERROR,
         );
       }
 
+      // 7. Prepara e insere os itens do pedido com retry
       const itemsWithOrderId = orderItemsToInsert.map((item) => ({
         ...item,
         order_id: newOrder.id,
@@ -157,43 +123,45 @@ export class OrdersService {
             `[Order ${newOrder.id}] Falha ao inserir itens (Tentativa ${attempts}/${maxRetries + 1}):`,
             itemsError,
           );
-
-          if (attempts <= maxRetries) {
+          if (attempts <= maxRetries)
             await new Promise((resolve) => setTimeout(resolve, 500));
-          }
         }
       }
 
+      // Rollback
       if (!itemsInserted) {
         console.error(
           `🚨 Iniciando ROLLBACK: Deletando a order ${newOrder.id} órfã...`,
         );
-
-        const { error: rollbackError } = await supabase
-          .from('orders')
-          .delete()
-          .eq('id', newOrder.id);
-
-        if (rollbackError) {
-          console.error(
-            `🚨 ALERTA CRÍTICO: Falha no rollback da order ${newOrder.id}!`,
-            rollbackError,
-          );
-        }
+        await supabase.from('orders').delete().eq('id', newOrder.id);
 
         throw new HttpException(
-          'Tivemos um problema de conexão ao finalizar seu pedido. Por favor, tente novamente mais tarde ou contate nosso suporte.',
+          'Tivemos um problema de conexão ao finalizar seu pedido. Por favor, tente novamente.',
           HttpStatus.SERVICE_UNAVAILABLE,
         );
       }
 
-      await supabase.from('cart_items').delete().eq('cart_id', cart.id);
-      await supabase.from('carts').update({ total_price: 0 }).eq('id', cart.id);
+      // 5. Gera o status inicial baseado na forma de pagamento
+      const paymentResult = await processPayment({
+        payment_method: dto.payment_method,
+        total_price: finalTotalPrice,
+        delivery_fee: deliveryFee,
+        order_id: newOrder.id,
+      });
+
+      // 8. 🔴 Limpa o carrinho APENAS se for dinheiro
+      if (dto.payment_method === 'cash') {
+        await supabase.from('cart_items').delete().eq('cart_id', cart.id);
+        await supabase
+          .from('carts')
+          .update({ total_price: 0 })
+          .eq('id', cart.id);
+      }
 
       return {
         message: 'Pedido criado com sucesso!',
         order_id: newOrder.id,
-        status: newOrder.status,
+        status: paymentResult.orderStatus,
         total_price: finalTotalPrice,
       };
     } catch (error) {
@@ -350,5 +318,21 @@ export class OrdersService {
   // Função interna para ser usada pelo Webhook de Pagamento amanhã
   async updateStatus(orderId: string, status: string) {
     // TODO: Atualizar status do pedido (ex: 'paid', 'shipped')
+  }
+
+  async confirmAndPayOrder(userId: string, orderId: string, paymentData: any) {
+    // 1. Busca o pedido pelo ID
+    // 2. Envia os dados (token do cartão gerado pelo app, ou pede geração de QR code) pro Mercado Pago
+    // 3. Se o Mercado Pago aprovar:
+    /* Pseudo-código:
+  const mpResult = await mercadoPagoService.charge(...);
+  if (mpResult.status === 'approved') {
+     await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
+     
+     // AGORA SIM APAGA O CARRINHO
+     const cart = await getUserCart(userId);
+     await supabase.from('cart_items').delete().eq('cart_id', cart.id);
+  }
+  */
   }
 }

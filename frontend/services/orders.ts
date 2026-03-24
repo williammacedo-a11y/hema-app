@@ -10,14 +10,24 @@ const getHeaders = async () => {
   };
 };
 
+type PaymentMethod = 'pix' | 'card' | 'cash';
 export const OrdersService = {
-  async createOrder(address_id?: string | null) {
+  async createOrder({
+    address_id,
+    payment_method,
+  }: {
+    address_id?: string | null;
+    payment_method: PaymentMethod;
+  }) {
     try {
       const headers = await getHeaders();
       const response = await fetch(`${API_URL}/checkout`, {
         method: "POST",
         headers,
-        body: JSON.stringify({ address_id: address_id || null }),
+        body: JSON.stringify({
+          address_id: address_id || null,
+          payment_method: payment_method,
+        }),
       });
 
       const data = await response.json();

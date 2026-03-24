@@ -24,6 +24,17 @@ export class OrdersController {
     return this.ordersService.createOrder(userId, dto);
   }
 
+  @Post(':id/pay')
+  @UseGuards(SupabaseAuthGuard)
+  payOrder(
+    @Req() req: Request,
+    @Body() order_id: string,
+    paymentData: any,
+  ) {
+    const userId = req['user'].sub;
+    return this.ordersService.confirmAndPayOrder(userId, order_id, paymentData);
+  }
+
   // 2. Histórico: Lista todos os pedidos do usuário logado
   @Get('my-orders')
   @UseGuards(SupabaseAuthGuard)

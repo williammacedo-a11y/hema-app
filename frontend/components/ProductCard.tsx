@@ -1,9 +1,10 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import { View, Text, TouchableOpacity } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { cardStyles } from "@/styles/productCard.styles"; // Ajuste o caminho do seu estilo se precisar
 import { Product } from "@/types/product";
+import { Image } from "expo-image";
 
 interface ProductCardProps {
   product: Product;
@@ -45,7 +46,9 @@ export function ProductCard({
           <Image
             source={{ uri: product.image_url }}
             style={cardStyles.productImage}
-            resizeMode="cover"
+            contentFit="cover"
+            transition={500}
+            cachePolicy="disk"
           />
         ) : (
           <View style={cardStyles.imageFallback}>

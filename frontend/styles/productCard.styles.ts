@@ -22,7 +22,7 @@ export const cardStyles = StyleSheet.create({
     }),
   },
   carouselWidth: {
-    width: 175,
+    width: 220,
     marginBottom: 0,
   },
   imageContainer: {
@@ -33,8 +33,10 @@ export const cardStyles = StyleSheet.create({
     borderBottomColor: "#F0F0F0",
   },
   productImage: {
-    width: "100%",
-    height: "100%",
+    width: 120,
+    height: 120,
+    borderRadius: 8,
+    backgroundColor: "#F0F0F0",
   },
   imageFallback: {
     width: "100%",
