@@ -13,31 +13,25 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
 
 @Controller('orders')
+@UseGuards(SupabaseAuthGuard)
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   // 1. O "Checkout": Transforma o carrinho/seleção em um pedido oficial
   @Post('checkout')
-  @UseGuards(SupabaseAuthGuard)
   createOrder(@Req() req: Request, @Body() dto: CreateOrderDto) {
     const userId = req['user'].sub;
     return this.ordersService.createOrder(userId, dto);
   }
 
   @Post(':id/pay')
-  @UseGuards(SupabaseAuthGuard)
-  payOrder(
-    @Req() req: Request,
-    @Body() order_id: string,
-    paymentData: any,
-  ) {
+  payOrder(@Req() req: Request, @Body() order_id: string, paymentData: any) {
     const userId = req['user'].sub;
     return this.ordersService.confirmAndPayOrder(userId, order_id, paymentData);
   }
 
   // 2. Histórico: Lista todos os pedidos do usuário logado
   @Get('my-orders')
-  @UseGuards(SupabaseAuthGuard)
   getUserOrders(@Req() req: Request) {
     const userId = req['user'].sub;
     return this.ordersService.findAllByUser(userId);
@@ -45,7 +39,6 @@ export class OrdersController {
 
   // 3. Detalhes: Pega um pedido específico (importante validar se o pedido pertence ao user)
   @Get(':id')
-  @UseGuards(SupabaseAuthGuard)
   getOrderDetails(@Req() req: Request, @Param('id') id: string) {
     const userId = req['user'].sub;
     return this.ordersService.findOne(userId, id);
@@ -53,7 +46,6 @@ export class OrdersController {
 
   // 4. Cancelamento: Fluxo de interrupção do pedido
   @Patch(':id/cancel')
-  @UseGuards(SupabaseAuthGuard)
   cancelOrder(@Req() req: Request, @Param('id') id: string) {
     const userId = req['user'].sub;
     return this.ordersService.cancelOrder(userId, id);

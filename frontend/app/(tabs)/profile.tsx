@@ -5,41 +5,51 @@ import {
   TouchableOpacity,
   ScrollView,
   StatusBar,
+  Image,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
-
-// Importação dos estilos separados
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { styles } from "../../styles/profile.styles";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { logout } from "../../services/auth";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker"; // IMPORTANTE
 import { router } from "expo-router";
+
+import { styles } from "../../styles/profile.styles";
+import { logout } from "../../services/auth";
+import { uploadAvatar } from "../../services/profile";
+import { Toast } from "@/util/toast";
 
 const MENU_OPTIONS = [
   { id: "1", title: "Meus Pedidos", route: "/orders" },
   { id: "2", title: "Endereços de Entrega", route: "/addresses" },
-  { id: "3", title: "Formas de Pagamento", route: "payment_coming_soon" },
   { id: "4", title: "Meus Dados", route: "/profile/details" },
   { id: "5", title: "Configurações", route: "/profile/settings" },
-  { id: "6", title: "Ajuda e Suporte", route: "/profile/support" },
 ];
 
 interface UserState {
   name: string;
   email: string;
+  avatarUrl?: string | null;
 }
 
 export default function ProfileScreen() {
   const [user, setUser] = useState<UserState>({
     name: "",
     email: "",
+    avatarUrl: null,
   });
+
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
       const name = await AsyncStorage.getItem("@hema_user_name");
       const email = await AsyncStorage.getItem("@hema_user_email");
+      const avatarUrl = await AsyncStorage.getItem("@hema_user_avatar"); // Busca a foto salva localmente
+
       if (name && email) {
-        setUser((user) => ({ ...user, name, email }));
+        setUser({ name, email, avatarUrl });
       }
     }
 
@@ -56,15 +66,55 @@ export default function ProfileScreen() {
     }
   };
 
-  const getInitials = (name: string) => {
-    if (!name) return "";
-
-    const names = name.trim().split(" ");
-
-    if (names.length === 1) {
-      return names[0].charAt(0).toUpperCase();
+  const handlePickImage = async () => {
+    // 1. Pede permissão
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (permissionResult.granted === false) {
+      Alert.alert(
+        "Permissão",
+        "Precisamos de acesso à sua galeria para alterar a foto.",
+      );
+      return;
     }
 
+    // 2. Abre a galeria
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+
+    if (!result.canceled && result.assets[0]) {
+      setUploading(true);
+      const asset = result.assets[0];
+
+      const fileData = {
+        uri: asset.uri,
+        type: asset.mimeType || "image/jpeg",
+        name: asset.fileName || `avatar-${Date.now()}.jpg`,
+      };
+
+      // Mandamos o objeto inteiro para a service
+      const response = await uploadAvatar(fileData);
+
+      if (response.success && response.data) {
+        setUser((prev) => ({ ...prev, avatarUrl: response.data }));
+        await AsyncStorage.setItem("@hema_user_avatar", response.data);
+        Toast.show({ type: "success", text1: "Foto atualizada com sucesso!" });
+      } else {
+        Toast.show({ type: "error", text1: "Ops!", text2: response.message });
+      }
+
+      setUploading(false);
+    }
+  };
+
+  const getInitials = (name: string) => {
+    if (!name) return "";
+    const names = name.trim().split(" ");
+    if (names.length === 1) return names[0].charAt(0).toUpperCase();
     return (
       names[0].charAt(0) + names[names.length - 1].charAt(0)
     ).toUpperCase();
@@ -78,11 +128,51 @@ export default function ProfileScreen() {
           style={styles.container}
           showsVerticalScrollIndicator={false}
         >
-          {/* Seção Superior: Avatar e Infos */}
+          {/* SEÇÃO SUPERIOR: Avatar e Infos */}
           <View style={styles.headerSection}>
-            <View style={styles.avatarPlaceholder}>
-              <Text style={styles.avatarText}>{getInitials(user.name)}</Text>
-            </View>
+            <TouchableOpacity onPress={handlePickImage} disabled={uploading}>
+              <View
+                style={[
+                  styles.avatarPlaceholder,
+                  {
+                    overflow: "hidden",
+                    justifyContent: "center",
+                    alignItems: "center",
+                  },
+                ]}
+              >
+                {uploading ? (
+                  <ActivityIndicator color="#E31837" />
+                ) : user.avatarUrl ? (
+                  <Image
+                    source={{ uri: user.avatarUrl }}
+                    style={{ width: "100%", height: "100%" }}
+                  />
+                ) : (
+                  <Text style={styles.avatarText}>
+                    {getInitials(user.name)}
+                  </Text>
+                )}
+              </View>
+
+              <View
+                style={{
+                  position: "absolute",
+                  bottom: 10,
+                  right: 10,
+                  backgroundColor: "#E31837",
+                  borderRadius: 12,
+                  padding: 4,
+                }}
+              >
+                <MaterialCommunityIcons
+                  name="camera-plus"
+                  size={14}
+                  color="#FFF"
+                />
+              </View>
+            </TouchableOpacity>
+
             <Text style={styles.userName}>{user.name}</Text>
             <Text style={styles.userEmail}>{user.email}</Text>
           </View>

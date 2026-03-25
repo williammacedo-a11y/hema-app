@@ -1,4 +1,13 @@
-import { PartialType } from '@nestjs/mapped-types';
-import { CreateProfileDto } from './create-profile.dto';
+export class UpdateProfileDto {
+  name?: string;
+  phone?: string;
+  cpf?: string;
+  password?: string; 
+  settings?: any;
+  avatar_url?: string;
+}
 
-export class UpdateProfileDto extends PartialType(CreateProfileDto) {}
+export class SupportTicketDto {
+  subject: string;
+  message: string;
+}

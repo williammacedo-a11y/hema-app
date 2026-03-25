@@ -4,43 +4,53 @@ import {
   Delete,
   Post,
   Body,
-  Param,
+  Req,
+  Get,
+  UseGuards,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ProfileService } from './profiles.service';
-import { HttpException, HttpStatus } from '@nestjs/common';
-
-export class UpdateProfileDto {
-  name?: string;
-  phone?: string;
-}
+import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
+import { UpdateProfileDto, SupportTicketDto } from './dto/update-profile.dto';
 
 @Controller('profile')
+@UseGuards(SupabaseAuthGuard)
 export class ProfileController {
   constructor(private profileService: ProfileService) {}
 
-  @Patch(':id')
-  async updateProfile(@Param('id') id: string, @Body() body: UpdateProfileDto) {
-    return this.profileService.updateProfile(id, body);
+  @Get()
+  async getProfile(@Req() req: any) {
+    const userId = req['user'].sub; 
+    return this.profileService.getProfile(userId);
   }
 
-  @Delete(':id')
-  async deleteProfile(@Param('id') id: string) {
-    return this.profileService.deleteProfile(id);
+  @Patch()
+  async updateProfile(@Req() req: any, @Body() body: UpdateProfileDto) {
+    const userId = req['user'].sub;
+    return this.profileService.updateProfile(userId, body);
   }
 
-  @Post(':id/avatar')
+  @Delete()
+  async deleteProfile(@Req() req: any) {
+    const userId = req['user'].sub;
+    return this.profileService.deleteProfile(userId);
+  }
+
+  @Post('avatar')
   @UseInterceptors(FileInterceptor('file'))
   async uploadAvatar(
-    @Param('id') id: string,
+    @Req() req: any,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    if (!file) {
-      throw new HttpException('Nenhum arquivo enviado', HttpStatus.BAD_REQUEST);
-    }
+    const userId = req['user'].sub;
+    return this.profileService.uploadAvatar(userId, file);
+  }
 
-    return this.profileService.uploadAvatar(id, file);
+  @Post('support')
+  async sendSupport(@Req() req: any, @Body() body: SupportTicketDto) {
+    const userId = req['user'].sub;
+    return this.profileService.createSupportTicket(userId, body);
   }
 }

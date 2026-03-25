@@ -12,15 +12,17 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Toast } from "@/util/toast";
 import { styles } from "@/styles/profile.styles";
-import { getCurrentUser, updateUserProfile } from "@/services/auth";
+import { getCurrentUser } from "@/services/auth";
+import { updateProfile, getProfileData } from "@/services/profile";
 
 export default function PersonalDetailsScreen() {
   const router = useRouter();
 
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [cpf, setCpf] = useState("");
 
@@ -31,17 +33,20 @@ export default function PersonalDetailsScreen() {
     async function loadData() {
       try {
         const user = await getCurrentUser();
-        if (user) {
-          setEmail(user.email || "");
-          setName(user.user_metadata?.name || "");
-          setPhone(user.user_metadata?.phone || "");
-          setCpf(user.user_metadata?.cpf || "");
+        if (user) setEmail(user.email || "");
 
-          // DICA: Se você quiser garantir que o nome vem do profiles e não do auth,
-          // você pode fazer um supabase.from('profiles').select('name').eq('id', user.id) aqui.
+        const profileResponse = await getProfileData();
+
+        if (profileResponse.success && profileResponse.data) {
+          setName(profileResponse.data.name || "");
+          setPhone(profileResponse.data.phone || "");
+          setCpf(profileResponse.data.cpf || "");
         }
       } catch (error) {
-        Toast.show({ type: "error", text1: "Erro ao carregar dados" });
+        Toast.show({
+          type: "error",
+          text1: "Erro ao carregar dados do usuário",
+        });
       } finally {
         setLoading(false);
       }
@@ -51,6 +56,7 @@ export default function PersonalDetailsScreen() {
 
   const handleSave = async () => {
     Keyboard.dismiss();
+
     if (!name.trim() || !email.trim()) {
       return Toast.show({
         type: "error",
@@ -59,23 +65,37 @@ export default function PersonalDetailsScreen() {
     }
 
     setSaving(true);
-    try {
-      await updateUserProfile({ name, phone, cpf, email });
+
+    const response = await updateProfile({
+      name,
+      phone,
+      cpf,
+    });
+
+    if (response.success) {
+      try {
+        await AsyncStorage.removeItem("@hema_user_name");
+        await AsyncStorage.setItem("@hema_user_name", name);
+      } catch (e) {
+        console.error("Erro ao salvar no AsyncStorage", e);
+      }
 
       Toast.show({
         type: "success",
-        text1: "Dados atualizados com sucesso!",
+        text1: "Sucesso!",
+        text2: response.message,
       });
-      router.back();
-    } catch (error: any) {
+
+      setTimeout(() => router.back(), 1500);
+    } else {
       Toast.show({
         type: "error",
         text1: "Erro ao salvar",
-        text2: error.message,
+        text2: response.message,
       });
-    } finally {
-      setSaving(false);
     }
+
+    setSaving(false);
   };
 
   if (loading) {
@@ -95,7 +115,7 @@ export default function PersonalDetailsScreen() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <StatusBar barStyle="dark-content" />
 
-      {/* CABEÇALHO FIXO */}
+      {/* CABEÇALHO */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <MaterialCommunityIcons name="arrow-left" size={24} color="#1A1A1A" />
@@ -104,11 +124,10 @@ export default function PersonalDetailsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* CONTEÚDO */}
       <ScrollView
         contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled" // Deixa clicar no salvar sem precisar fechar o teclado antes
-        keyboardDismissMode="on-drag" // Fecha o teclado ao arrastar a tela (Padrão ouro do iOS/Android)
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
       >
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Nome Completo</Text>
@@ -117,17 +136,19 @@ export default function PersonalDetailsScreen() {
             value={name}
             onChangeText={setName}
             autoCorrect={false}
+            placeholder="Digite seu nome"
           />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>E-mail</Text>
           <TextInput
-            style={styles.input}
+            style={[
+              styles.input,
+              { backgroundColor: "#F5F5F5", color: "#888" },
+            ]} // E-mail geralmente é readonly em profiles simples
             value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
+            editable={false} // Mantendo desabilitado para evitar conflito com Auth sem re-autenticação
           />
         </View>
 
@@ -150,11 +171,12 @@ export default function PersonalDetailsScreen() {
             keyboardType="numeric"
             value={cpf}
             onChangeText={setCpf}
+            maxLength={14} // Bom colocar limite pra evitar lixo no banco
           />
         </View>
       </ScrollView>
 
-      {/* RODAPÉ FIXO */}
+      {/* RODAPÉ */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.saveBtn, saving && { opacity: 0.7 }]}
