@@ -11,20 +11,25 @@ export function useHomeData() {
 
   const loadData = async () => {
     try {
-      await AsyncStorage.getItem("@hema_user_name").then((name) => {
-        if (name) {
-          let firstName = name.split(" ");
-          setUserName(firstName[0]);
-        }
-      });
-      const data = await getHomeCatalog();
-      setCatalog(data);
-    } catch (error) {
-      console.error(error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      const name = await AsyncStorage.getItem("@hema_user_name");
+      if (name) {
+        const firstName = name.split(" ")[0];
+        setUserName(firstName);
+      }
+    } catch (e) {
+      console.error("Erro ao ler nome do cache", e);
     }
+
+    const response = await getHomeCatalog();
+
+    if (response.success && response.data) {
+      setCatalog(response.data);
+    } else {
+      setCatalog([]);
+    }
+
+    setLoading(false);
+    setRefreshing(false);
   };
 
   const onRefresh = () => {

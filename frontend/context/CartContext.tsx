@@ -12,22 +12,25 @@ import { Toast } from "@/util/toast";
 type Cart = any;
 type CartItem = any;
 
+type AddCartItemDTO = {
+  product_id: string;
+  quantity?: number;
+  weight?: number;
+  price: number;
+};
+
 type CartContextType = {
   cart: Cart | null;
   items: CartItem[];
   loading: boolean;
   cartCount: number;
   refreshCart: () => Promise<void>;
-  addItem: (data: AddCartItemDTO) => Promise<void>;
-  updateItem: (id: string, data: any) => Promise<void>;
+  addItem: (data: AddCartItemDTO) => Promise<boolean>;
+  updateItem: (
+    id: string,
+    data: { quantity?: number; weight?: number },
+  ) => Promise<void>;
   removeItem: (id: string) => Promise<void>;
-};
-
-type AddCartItemDTO = {
-  product_id: string;
-  quantity?: number;
-  weight?: number;
-  price: number;
 };
 
 const CartContext = createContext<CartContextType | null>(null);
@@ -39,52 +42,52 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
   const cartCount = items.length;
 
+  // REFRESH: Apenas sincroniza a tela com o backend silenciosamente
   const refreshCart = useCallback(async () => {
-    try {
-      setLoading(true);
-      const data = await cartService.getCartService();
-      if (data) {
-        setCart(data.cart || {});
-        setItems(data.items || []);
-      }
-    } catch (err) {
-      console.error("Erro ao buscar carrinho", err);
-    } finally {
-      setLoading(false);
+    setLoading(true);
+    const response = await cartService.getCartService();
+
+    if (response.success && response.data) {
+      setCart(response.data.cart || {});
+      setItems(response.data.items || []);
     }
+    // Se não tiver success (ex: usuário deslogado), apenas deixamos vazio
+    setLoading(false);
   }, []);
 
+  // ADD: Optimistic UI com tratamento de erro padronizado
   const addItem = useCallback(
     async (data: AddCartItemDTO) => {
       const previousItems = [...items];
 
+      // Optimistic Update: Adiciona um fake temporário
       const tempItem = {
         id: `temp-${Date.now()}`,
         product_id: data.product_id,
         quantity: data.quantity || 0,
         weight: data.weight || 0,
-        product: {},
+        product: {}, // Poderíamos passar o produto real aqui se a tela que chamou fornecer
       };
 
       setItems((prev) => [...prev, tempItem]);
 
-      try {
-        await cartService.addCartItemService(data);
+      const response = await cartService.addCartItemService(data);
 
-        const dataFromServer = await cartService.getCartService();
-        if (dataFromServer) {
-          setCart(dataFromServer.cart || {});
-          setItems(dataFromServer.items || []);
-        }
-      } catch (err) {
+      if (response.success) {
+        Toast.show({ type: "success", text1: response.message }); // "Produto adicionado ao carrinho"
+        await refreshCart(); // Puxa os IDs reais do banco
+        return true;
+      } else {
+        // Rollback: Reverte para a lista anterior se deu erro
         setItems(previousItems);
-        console.error("Erro ao adicionar item", err);
-        throw err;
+        Toast.show({ type: "error", text1: response.message }); // "O peso é obrigatório"
+        return false;
       }
     },
-    [items],
+    [items, refreshCart],
   );
 
+  // UPDATE: Optimistic UI com tratamento de erro padronizado
   const updateItem = useCallback(
     async (id: string, data: { quantity?: number; weight?: number }) => {
       const previousItems = [...items];
@@ -96,24 +99,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         ),
       );
 
-      try {
-        await cartService.updateCartItemService(id, data);
+      const response = await cartService.updateCartItemService(id, data);
 
-        const res = await cartService.getCartService();
-        if (res) {
-          setCart(res.cart);
-          setItems(res.items || []);
-        }
-      } catch (err) {
+      if (response.success) {
+        await refreshCart();
+      } else {
+        // Rollback
         setItems(previousItems);
         setCart(previousCart);
-        Toast.show({ type: "error", text1: "Erro ao atualizar quantidade." });
-        console.error("Erro ao atualizar item", err);
+        Toast.show({ type: "error", text1: response.message });
       }
     },
-    [items, cart],
+    [items, cart, refreshCart],
   );
 
+  // REMOVE: Optimistic UI com tratamento de erro padronizado
   const removeItem = useCallback(
     async (id: string) => {
       const previousItems = [...items];
@@ -121,28 +121,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
       setItems((currentItems) => currentItems.filter((item) => item.id !== id));
 
-      Toast.show({ type: "success", text1: "Removido com sucesso!" });
+      const response = await cartService.removeCartItemService(id);
 
-      try {
-        await cartService.removeCartItemService(id);
-
-        const res = await cartService.getCartService();
-        if (res) {
-          setCart(res.cart);
-
-          if (res.items) setItems(res.items);
-        }
-      } catch (err) {
+      if (response.success) {
+        Toast.show({ type: "success", text1: response.message }); 
+        await refreshCart();
+      } else {
         setItems(previousItems);
         setCart(previousCart);
-        Toast.show({
-          type: "error",
-          text1: "Não foi possível remover o item.",
-        });
-        console.error("Erro ao remover item", err);
+        Toast.show({ type: "error", text1: response.message });
       }
     },
-    [items, cart],
+    [items, cart, refreshCart],
   );
 
   useEffect(() => {

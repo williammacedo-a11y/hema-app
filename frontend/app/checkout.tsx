@@ -1,14 +1,14 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useEffect } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StatusBar,
   ScrollView,
-  Alert,
   ActivityIndicator,
   Modal,
   RefreshControl,
+  Alert, // Mantive apenas para o aviso de área não atendida (pois precisa do botão de confirmar)
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -17,9 +17,10 @@ import { styles } from "../styles/checkout.styles";
 import { useCart } from "@/context/CartContext";
 import { getAddresses, Address } from "@/services/addresses";
 import { OrdersService } from "@/services/orders";
+import { Toast } from "@/util/toast"; // Novo import de Toasts
 
 type DeliveryMethod = "pickup" | "delivery";
-type PaymentMethod = "pix" | "card" | "cash";
+type PaymentMethod = "pix" | "credit_card" | "cash";
 
 function calculateDeliveryFee(city?: string): number {
   if (!city) return 0;
@@ -42,12 +43,13 @@ function calculateDeliveryFee(city?: string): number {
   if (tier10.includes(normalizedCity)) return 10.0;
   if (tier15.includes(normalizedCity)) return 15.0;
 
-  return -1; // Região não atendida
+  return -1;
 }
 
 export default function CheckoutScreen() {
   const router = useRouter();
   const { items, loading, cart, refreshCart } = useCart();
+
   const [deliveryMethod, setDeliveryMethod] =
     useState<DeliveryMethod>("delivery");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("pix");
@@ -55,21 +57,24 @@ export default function CheckoutScreen() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
     null,
   );
+
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadData = async () => {
-    try {
-      // 1. Atualiza o carrinho para garantir que preços/itens estão batendo
-      await refreshCart();
+    // 1. Atualiza o carrinho (silencioso)
+    await refreshCart();
 
-      // 2. Busca os endereços
-      const data = await getAddresses();
+    // 2. Busca os endereços (Motor lida com erros de rede)
+    const response = await getAddresses();
+
+    if (response.success && response.data) {
+      const data = response.data;
       setAddresses(data);
 
-      // 3. Lógica de seleção automática (já existia no seu código)
+      // 3. Seleção automática
       setSelectedAddressId((currentSelectedId) => {
         if (currentSelectedId) return currentSelectedId;
         if (data.length > 0) {
@@ -78,8 +83,8 @@ export default function CheckoutScreen() {
         }
         return null;
       });
-    } catch (error) {
-      console.error("Erro ao carregar dados do checkout:", error);
+    } else {
+      console.log("Falha ao carregar endereços no checkout:", response.message);
     }
   };
 
@@ -97,7 +102,6 @@ export default function CheckoutScreen() {
   };
 
   const subtotal = cart?.total_price ? Number(cart.total_price) : 0;
-
   const selectedAddress = addresses.find((a) => a.id === selectedAddressId);
 
   const currentDeliveryFee = useMemo(() => {
@@ -115,13 +119,13 @@ export default function CheckoutScreen() {
     });
   };
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (
       deliveryMethod === "delivery" &&
       currentDeliveryFee === -1 &&
       selectedAddressId
     ) {
-      // Pequeno timeout apenas para a animação do RadioButton finalizar suavemente
+      // Mantivemos o Alert nativo aqui pois essa é uma mensagem bloqueante que o usuário precisa confirmar "Entendi"
       const timer = setTimeout(() => {
         Alert.alert(
           "Região não atendida 🛵",
@@ -136,40 +140,41 @@ export default function CheckoutScreen() {
 
   const handleConfirmOrder = async () => {
     if (items.length === 0) {
-      Alert.alert("Ops!", "Seu carrinho está vazio.");
-      return;
+      return Toast.show({ type: "error", text1: "Seu carrinho está vazio." });
     }
 
     if (deliveryMethod === "delivery") {
       if (!selectedAddressId) {
-        Alert.alert(
-          "Atenção",
-          "Por favor, selecione ou adicione um endereço para a entrega.",
-        );
-        return;
+        return Toast.show({
+          type: "error",
+          text1: "Atenção",
+          text2: "Por favor, selecione um endereço para a entrega.",
+        });
       }
 
       if (currentDeliveryFee === -1) {
-        Alert.alert(
-          "Região não atendida",
-          "Infelizmente não realizamos entregas para esta cidade. Selecione a opção Retirada na Loja.",
-        );
-        return;
+        return Toast.show({
+          type: "error",
+          text1: "Região não atendida",
+          text2: "Selecione a opção Retirada na Loja.",
+        });
       }
     }
 
-    try {
-      setIsCreatingOrder(true);
+    setIsCreatingOrder(true);
 
-      const addressToLog =
-        deliveryMethod === "delivery" ? selectedAddressId : null;
+    const addressToLog =
+      deliveryMethod === "delivery" ? selectedAddressId : null;
 
-      const result = await OrdersService.createOrder({
-        address_id: addressToLog,
-        payment_method: paymentMethod,
-      });
+    const response = await OrdersService.createOrder({
+      address_id: addressToLog,
+      payment_method: paymentMethod,
+    });
 
-      // limpa carrinho só depois que deu certo
+    setIsCreatingOrder(false);
+
+    if (response.success && response.data) {
+      // Limpa carrinho só depois que deu certo
       await refreshCart();
 
       if (paymentMethod === "cash") {
@@ -178,19 +183,18 @@ export default function CheckoutScreen() {
         router.push({
           pathname: "/payment/[id]",
           params: {
-            id: result.order_id,
+            id: response.data.order_id,
             method: paymentMethod,
-            total: result.total_price,
+            total: response.data.total_price,
           },
         });
       }
-    } catch (error: any) {
-      Alert.alert(
-        "Erro ao finalizar pedido",
-        error.message || "Tente novamente mais tarde.",
-      );
-    } finally {
-      setIsCreatingOrder(false);
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Erro ao finalizar pedido",
+        text2: response.message,
+      });
     }
   };
 
@@ -355,7 +359,6 @@ export default function CheckoutScreen() {
                         }
                       />
                       <View style={styles.addressItemTextContainer}>
-                        {/* 🌟 NOVO: Exibição da Label (ex: "Casa", "Trabalho") */}
                         {address.label && (
                           <Text
                             style={{
@@ -437,19 +440,19 @@ export default function CheckoutScreen() {
             <TouchableOpacity
               style={[
                 styles.optionCard,
-                paymentMethod === "card" && styles.optionCardActive,
+                paymentMethod === "credit_card" && styles.optionCardActive, // credit_card!
               ]}
-              onPress={() => setPaymentMethod("card")}
+              onPress={() => setPaymentMethod("credit_card")} // credit_card!
             >
               <MaterialCommunityIcons
                 name="credit-card-outline"
                 size={24}
-                color={paymentMethod === "card" ? "#E31837" : "#999"}
+                color={paymentMethod === "credit_card" ? "#E31837" : "#999"}
               />
               <Text
                 style={[
                   styles.optionText,
-                  paymentMethod === "card" && styles.optionTextActive,
+                  paymentMethod === "credit_card" && styles.optionTextActive,
                 ]}
               >
                 Cartão

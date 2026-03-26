@@ -12,7 +12,7 @@ import {
   UIManager,
   ActivityIndicator,
 } from "react-native";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router"; // Adicionado useRouter para redirecionamento
 import { styles } from "../styles/auth.styles";
 import { login, signup } from "../services/auth";
 import { View as MotiView, Text as MotiText, AnimatePresence } from "moti";
@@ -26,6 +26,7 @@ if (
 }
 
 export default function AuthScreen() {
+  const router = useRouter(); // Hook para navegar
   const [isLogin, setIsLogin] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -47,17 +48,20 @@ export default function AuthScreen() {
     Keyboard.dismiss();
     setIsLoading(true);
 
-    try {
-      await login(email, password);
-    } catch (err: any) {
+    const response = await login(email, password);
+
+    setIsLoading(false);
+
+    if (response.success) {
+      // Toast de sucesso opcional para login. Muitas vezes só redirecionar já basta para uma boa UX.
+      Toast.show({ type: "success", text1: response.message });
+      router.replace("/(tabs)/home"); // Redireciona para a Home
+    } else {
       Toast.show({
         type: "error",
         text1: "Erro ao entrar",
-        text2: "E-mail ou senha incorretos.",
+        text2: response.message,
       });
-      console.log(err);
-    } finally {
-      setIsLoading(false);
     }
   }
 
@@ -69,17 +73,19 @@ export default function AuthScreen() {
     Keyboard.dismiss();
     setIsLoading(true);
 
-    try {
-      await signup(email, password, name);
-    } catch (err: any) {
+    const response = await signup(email, password, name);
+
+    setIsLoading(false);
+
+    if (response.success) {
+      Toast.show({ type: "success", text1: response.message });
+      router.replace("/(tabs)/home"); // Cadastrou, já manda pra loja
+    } else {
       Toast.show({
         type: "error",
         text1: "Erro ao criar conta",
-        text2: err.message || "Tente novamente mais tarde.",
+        text2: response.message,
       });
-      console.log(err);
-    } finally {
-      setIsLoading(false);
     }
   }
 

@@ -1,25 +1,36 @@
-import * as api from "@/lib/api";
+import { apiFetch, ApiResponse } from "./api";
 
-export async function addCartItemService(data: {
+export interface AddCartItemData {
   product_id: string;
   quantity?: number;
   weight?: number;
-}) {
-  const { response } = await api.addCartItem(data);
-  return response;
 }
 
-export async function getCartService() {
-  const data = await api.getCart();
-  return data;
+export async function addCartItemService(
+  data: AddCartItemData,
+): Promise<ApiResponse<{ cart_id: string }>> {
+  return apiFetch("/cart/items", {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
 }
 
-export async function updateCartItemService(id: string, data: any) {
-  const response = await api.updateCartItem(id, data);
-  return response;
+export async function getCartService(): Promise<ApiResponse<any>> {
+  return apiFetch("/cart", { method: "GET" });
 }
 
-export async function removeCartItemService(id: string) {
-  const data = await api.removeCartItem(id);
-  return data;
+export async function updateCartItemService(
+  id: string,
+  data: Partial<AddCartItemData>,
+): Promise<ApiResponse<void>> {
+  return apiFetch(`/cart/items/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function removeCartItemService(
+  id: string,
+): Promise<ApiResponse<void>> {
+  return apiFetch(`/cart/items/${id}`, { method: "DELETE" });
 }

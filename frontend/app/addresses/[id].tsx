@@ -22,6 +22,7 @@ import {
   createAddress,
   updateAddress,
 } from "@/services/addresses";
+import { styles } from "@/styles/addresses.styles";
 
 export default function AddressFormScreen() {
   const router = useRouter();
@@ -44,16 +45,15 @@ export default function AddressFormScreen() {
   const [isDefault, setIsDefault] = useState(false);
 
   useEffect(() => {
-    if (isEditing) {
-      loadAddressData();
-    }
+    if (isEditing) loadAddressData();
   }, [id]);
 
   const loadAddressData = async () => {
-    try {
-      setLoading(true);
-      const addresses = await getAddresses();
-      const addr = addresses.find((a) => a.id === id);
+    setLoading(true);
+    const response = await getAddresses();
+
+    if (response.success && response.data) {
+      const addr = response.data.find((a: any) => a.id === id);
       if (addr) {
         setLabel(addr.label || "");
         setZipCode(addr.zip_code || "");
@@ -68,214 +68,139 @@ export default function AddressFormScreen() {
         Alert.alert("Erro", "Endereço não encontrado.");
         router.back();
       }
-    } catch (error) {
-      console.error(error);
-      Toast.show({
-        type: "error",
-        text1: "Não foi possível carregar os dados",
-      });
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   const handleCepSearch = async () => {
-    if (zipCode.replace(/\D/g, "").length !== 8) return;
+    const cleanCep = zipCode.replace(/\D/g, "");
+    if (cleanCep.length !== 8) return;
 
-    try {
-      setLoadingCep(true);
-      const data = await getAddressByCep(zipCode);
-      if (data) {
-        setStreet(data.street);
-        setNeighborhood(data.neighborhood);
-        setCity(data.city);
-        setState(data.state);
-        Toast.show({ type: "success", text1: "CEP encontrado" });
-      }
-    } catch (error) {
-      Toast.show({ type: "error", text1: "CEP inválido ou não encontrado." });
-    } finally {
-      setLoadingCep(false);
+    setLoadingCep(true);
+    const response = await getAddressByCep(cleanCep);
+
+    if (response.success && response.data) {
+      setStreet(response.data.street);
+      setNeighborhood(response.data.neighborhood);
+      setCity(response.data.city);
+      setState(response.data.state);
+      Toast.show({ type: "success", text1: "CEP encontrado" });
     }
+    setLoadingCep(false);
   };
 
   const handleSave = async () => {
-    // 1. Validação básica de campos
     if (!zipCode || !street || !number || !neighborhood || !city || !state) {
       Alert.alert("Atenção", "Preencha todos os campos obrigatórios (*).");
       return;
     }
 
-    // Função interna que realmente executa a chamada à API
     const executeSave = async () => {
-      try {
-        setSaving(true);
-        const payload = {
-          label,
-          zip_code: zipCode,
-          street,
-          number,
-          complement,
-          neighborhood,
-          city,
-          state,
-          is_default: isDefault,
-        };
+      setSaving(true);
+      const payload = {
+        label,
+        zip_code: zipCode,
+        street,
+        number,
+        complement,
+        neighborhood,
+        city,
+        state,
+        is_default: isDefault,
+      };
 
-        if (isEditing) {
-          await updateAddress(id as string, payload);
-          Toast.show({ type: "success", text1: "Endereço atualizado!" });
-        } else {
-          await createAddress(payload);
-          Toast.show({ type: "success", text1: "Endereço adicionado!" });
-        }
+      const response = isEditing
+        ? await updateAddress(id as string, payload)
+        : await createAddress(payload);
 
+      if (response.success) {
+        Toast.show({
+          type: "success",
+          text1: isEditing ? "Endereço atualizado!" : "Endereço adicionado!",
+        });
         router.back();
-      } catch (error) {
-        console.error(error);
+      } else {
         Toast.show({
           type: "error",
           text1: "Erro ao salvar",
-          text2: "Verifique os dados e tente novamente.",
+          text2: response.message,
         });
-      } finally {
-        setSaving(false);
       }
+      setSaving(false);
     };
 
-    // 2. Lógica de Verificação do Endereço Padrão
     if (isDefault) {
-      try {
-        setSaving(true); // Ativa o loading enquanto checa os endereços
-        const allAddresses = await getAddresses();
-
-        // Verifica se existe OUTRO endereço que já é o padrão
-        const existingDefault = allAddresses.find(
-          (a) => a.is_default === true && a.id !== id,
+      setSaving(true);
+      const response = await getAddresses();
+      if (response.success && response.data) {
+        const existingDefault = response.data.find(
+          (a: any) => a.is_default === true && a.id !== id,
         );
-
         if (existingDefault) {
-          setSaving(false); // Para o loading para mostrar o alerta
+          setSaving(false);
           Alert.alert(
             "Alterar padrão?",
-            `O endereço "${existingDefault.label || "Meu Endereço"}" já está definido como padrão. Deseja tornar este novo endereço o seu principal?`,
+            `O endereço "${existingDefault.label || "Meu Endereço"}" já é o padrão. Deseja tornar este o seu principal?`,
             [
               { text: "Cancelar", style: "cancel" },
-              {
-                text: "Sim, alterar",
-                onPress: () => executeSave(),
-              },
+              { text: "Sim, alterar", onPress: () => executeSave() },
             ],
           );
-          return; // Interrompe o handleSave, aguarda o clique no Alert
+          return;
         }
-      } catch (err) {
-        console.error("Erro ao verificar endereços existentes", err);
-      } finally {
-        setSaving(false);
       }
     }
-
-    // Se não for 'default' ou se não houver conflito, salva direto
     executeSave();
   };
 
   if (loading) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#E31837" />
       </View>
     );
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#fff" }} edges={["top"]}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <StatusBar barStyle="dark-content" />
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         {/* Header */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            padding: 16,
-            borderBottomWidth: 1,
-            borderBottomColor: "#E5E7EB",
-            backgroundColor: "#fff",
-          }}
-        >
+        <View style={styles.header}>
           <TouchableOpacity
             onPress={() => router.back()}
-            style={{ marginRight: 16 }}
+            style={styles.backButton}
           >
             <Ionicons name="close" size={24} color="#111827" />
           </TouchableOpacity>
-          <Text style={{ fontSize: 18, fontWeight: "bold", color: "#111827" }}>
+          <Text style={styles.headerTitle}>
             {isEditing ? "Editar Endereço" : "Novo Endereço"}
           </Text>
         </View>
 
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }}>
-          <View style={{ marginBottom: 20 }}>
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: "#374151",
-                marginBottom: 8,
-              }}
-            >
-              IDENTIFICAÇÃO DO LOCAL
-            </Text>
-            <View
-              style={{
-                backgroundColor: "#F3F4F6",
-                borderRadius: 10,
-                paddingHorizontal: 12,
-              }}
-            >
-              <TextInput
-                placeholder="Ex: Minha Casa, Trabalho, Casa da Mãe..."
-                style={{ height: 50, fontSize: 15, color: "#111827" }}
-                value={label}
-                onChangeText={setLabel}
-              />
-            </View>
+        <ScrollView contentContainerStyle={styles.formContent}>
+          <Text style={styles.sectionTitle}>IDENTIFICAÇÃO DO LOCAL</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Ex: Minha Casa, Trabalho..."
+              style={styles.input}
+              value={label}
+              onChangeText={setLabel}
+            />
           </View>
 
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 12,
-              marginBottom: 20,
-            }}
-          >
+          <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "600",
-                  color: "#374151",
-                  marginBottom: 8,
-                }}
-              >
-                CEP *
-              </Text>
-              <View
-                style={{
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                }}
-              >
+              <Text style={styles.inputLabel}>CEP *</Text>
+              <View style={styles.inputContainer}>
                 <TextInput
                   placeholder="00000-000"
                   keyboardType="numeric"
                   maxLength={9}
-                  style={{ height: 50, fontSize: 15, color: "#111827" }}
+                  style={styles.input}
                   value={zipCode}
                   onChangeText={setZipCode}
                   onBlur={handleCepSearch}
@@ -283,87 +208,42 @@ export default function AddressFormScreen() {
               </View>
             </View>
             {loadingCep && (
-              <View style={{ marginTop: 24 }}>
-                <ActivityIndicator size="small" color="#E31837" />
-              </View>
+              <ActivityIndicator
+                size="small"
+                color="#E31837"
+                style={{ marginTop: 25 }}
+              />
             )}
           </View>
 
-          <View style={{ marginBottom: 20 }}>
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: "#374151",
-                marginBottom: 8,
-              }}
-            >
-              Rua/Avenida *
-            </Text>
-            <View
-              style={{
-                backgroundColor: "#F3F4F6",
-                borderRadius: 10,
-                paddingHorizontal: 12,
-              }}
-            >
-              <TextInput
-                placeholder="Av. Paulista..."
-                style={{ height: 50, fontSize: 15, color: "#111827" }}
-                value={street}
-                onChangeText={setStreet}
-              />
-            </View>
+          <Text style={styles.inputLabel}>Rua/Avenida *</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Av. Paulista..."
+              style={styles.input}
+              value={street}
+              onChangeText={setStreet}
+            />
           </View>
 
-          <View style={{ flexDirection: "row", gap: 16, marginBottom: 20 }}>
+          <View style={styles.row}>
             <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "600",
-                  color: "#374151",
-                  marginBottom: 8,
-                }}
-              >
-                Número *
-              </Text>
-              <View
-                style={{
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                }}
-              >
+              <Text style={styles.inputLabel}>Número *</Text>
+              <View style={styles.inputContainer}>
                 <TextInput
-                  placeholder="Ex: 1000"
-                  style={{ height: 50, fontSize: 15, color: "#111827" }}
+                  placeholder="100"
+                  style={styles.input}
                   value={number}
                   onChangeText={setNumber}
                 />
               </View>
             </View>
             <View style={{ flex: 2 }}>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "600",
-                  color: "#374151",
-                  marginBottom: 8,
-                }}
-              >
-                Complemento
-              </Text>
-              <View
-                style={{
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                }}
-              >
+              <Text style={styles.inputLabel}>Complemento</Text>
+              <View style={styles.inputContainer}>
                 <TextInput
                   placeholder="Apto, Bloco..."
-                  style={{ height: 50, fontSize: 15, color: "#111827" }}
+                  style={styles.input}
                   value={complement}
                   onChangeText={setComplement}
                 />
@@ -371,83 +251,36 @@ export default function AddressFormScreen() {
             </View>
           </View>
 
-          <View style={{ marginBottom: 20 }}>
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "600",
-                color: "#374151",
-                marginBottom: 8,
-              }}
-            >
-              Bairro *
-            </Text>
-            <View
-              style={{
-                backgroundColor: "#F3F4F6",
-                borderRadius: 10,
-                paddingHorizontal: 12,
-              }}
-            >
-              <TextInput
-                placeholder="Ex: Centro"
-                style={{ height: 50, fontSize: 15, color: "#111827" }}
-                value={neighborhood}
-                onChangeText={setNeighborhood}
-              />
-            </View>
+          <Text style={styles.inputLabel}>Bairro *</Text>
+          <View style={styles.inputContainer}>
+            <TextInput
+              placeholder="Ex: Centro"
+              style={styles.input}
+              value={neighborhood}
+              onChangeText={setNeighborhood}
+            />
           </View>
 
-          <View style={{ flexDirection: "row", gap: 16, marginBottom: 30 }}>
+          <View style={styles.row}>
             <View style={{ flex: 2 }}>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "600",
-                  color: "#374151",
-                  marginBottom: 8,
-                }}
-              >
-                Cidade *
-              </Text>
-              <View
-                style={{
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                }}
-              >
+              <Text style={styles.inputLabel}>Cidade *</Text>
+              <View style={styles.inputContainer}>
                 <TextInput
                   placeholder="Ex: São Paulo"
-                  style={{ height: 50, fontSize: 15, color: "#111827" }}
+                  style={styles.input}
                   value={city}
                   onChangeText={setCity}
                 />
               </View>
             </View>
             <View style={{ flex: 1 }}>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: "600",
-                  color: "#374151",
-                  marginBottom: 8,
-                }}
-              >
-                UF *
-              </Text>
-              <View
-                style={{
-                  backgroundColor: "#F3F4F6",
-                  borderRadius: 10,
-                  paddingHorizontal: 12,
-                }}
-              >
+              <Text style={styles.inputLabel}>UF *</Text>
+              <View style={styles.inputContainer}>
                 <TextInput
                   placeholder="SP"
                   maxLength={2}
                   autoCapitalize="characters"
-                  style={{ height: 50, fontSize: 15, color: "#111827" }}
+                  style={styles.input}
                   value={state}
                   onChangeText={setState}
                 />
@@ -455,23 +288,10 @@ export default function AddressFormScreen() {
             </View>
           </View>
 
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingVertical: 14,
-              borderTopWidth: 1,
-              borderTopColor: "#E5E7EB",
-            }}
-          >
+          <View style={styles.switchContainer}>
             <View style={{ flex: 1 }}>
-              <Text
-                style={{ fontSize: 16, fontWeight: "600", color: "#111827" }}
-              >
-                Tornar como padrão
-              </Text>
-              <Text style={{ fontSize: 13, color: "#6B7280", marginTop: 2 }}>
+              <Text style={styles.switchLabel}>Tornar como padrão</Text>
+              <Text style={styles.switchSublabel}>
                 Este endereço será o principal em suas compras.
               </Text>
             </View>
@@ -480,39 +300,21 @@ export default function AddressFormScreen() {
               onValueChange={setIsDefault}
               trackColor={{ false: "#D1D5DB", true: "#FECDD3" }}
               thumbColor={isDefault ? "#E31837" : "#F9FAFB"}
-              ios_backgroundColor="#D1D5DB"
             />
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <View
-        style={{
-          position: "absolute",
-          bottom: 0,
-          left: 0,
-          right: 0,
-          padding: 16,
-          backgroundColor: "#fff",
-          borderTopWidth: 1,
-          borderTopColor: "#E5E7EB",
-        }}
-      >
+      <View style={styles.footer}>
         <TouchableOpacity
-          style={{
-            backgroundColor: saving ? "#F87171" : "#E31837",
-            padding: 16,
-            borderRadius: 12,
-            alignItems: "center",
-          }}
+          style={[styles.saveButton, saving && styles.buttonDisabled]}
           onPress={handleSave}
           disabled={saving}
-          activeOpacity={0.8}
         >
           {saving ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={{ color: "#fff", fontSize: 16, fontWeight: "bold" }}>
+            <Text style={styles.saveButtonText}>
               {isEditing ? "Salvar Alterações" : "Adicionar Endereço"}
             </Text>
           )}

@@ -20,11 +20,9 @@ export type CartItemWithProduct = {
   id: string;
   cart_id: string;
   product_id: string;
-
   quantity: number | null;
   weight: number | null;
   price: number;
-
   product: {
     id: string;
     name: string;
@@ -40,4 +38,3 @@ export type AddCartItemDTO = {
   quantity?: number;
   weight?: number;
 };
-

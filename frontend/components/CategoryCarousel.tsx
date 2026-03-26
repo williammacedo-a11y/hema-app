@@ -2,9 +2,7 @@ import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
-  StyleSheet,
   ActivityIndicator,
   FlatList,
 } from "react-native";
@@ -12,12 +10,7 @@ import { useRouter } from "expo-router";
 import { CategoryBadgesService } from "@/services/category";
 import { styles } from "@/styles/category.badge.styles";
 
-const categoryOrder = [
-  "Whey",
-  "Creatina",
-  "Snacks e Barras",
-  "Pré-Treinos",
-];
+const categoryOrder = ["Whey", "Creatina", "Snacks e Barras", "Pré-Treinos"];
 
 export function CategoryCarousel() {
   const router = useRouter();
@@ -26,10 +19,12 @@ export function CategoryCarousel() {
 
   useEffect(() => {
     async function loadCategories() {
-      try {
-        const data = await CategoryBadgesService.getCategories();
+      setLoading(true);
 
-        const sortedData = [...data].sort((a, b) => {
+      const response = await CategoryBadgesService.getCategories();
+
+      if (response.success && response.data) {
+        const sortedData = [...response.data].sort((a, b) => {
           const indexA = categoryOrder.indexOf(a.name);
           const indexB = categoryOrder.indexOf(b.name);
 
@@ -40,12 +35,16 @@ export function CategoryCarousel() {
         });
 
         setCategories(sortedData);
-      } catch (error) {
-        console.error("Erro ao carregar categorias no carrossel:", error);
-      } finally {
-        setLoading(false);
+      } else {
+        console.log(
+          "Erro ao carregar categorias no carrossel:",
+          response.message,
+        );
       }
+
+      setLoading(false);
     }
+
     loadCategories();
   }, []);
 
@@ -56,6 +55,8 @@ export function CategoryCarousel() {
       </View>
     );
   }
+
+  if (categories.length === 0) return null;
 
   return (
     <View style={styles.container}>

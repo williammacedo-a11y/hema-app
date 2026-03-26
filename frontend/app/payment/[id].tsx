@@ -5,7 +5,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Alert,
   ActivityIndicator,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
@@ -13,6 +12,7 @@ import { styles } from "@/styles/payment.styles";
 import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { Toast } from "@/util/toast"; // Substituindo os Alerts pelo Toast
 
 const formatPrice = (value: string | number) => {
   const val = typeof value === "string" ? parseFloat(value) : value;
@@ -33,6 +33,8 @@ export default function PaymentPage() {
   const displayId = id ? id.split("-")[0] : "...";
 
   useEffect(() => {
+    // Isso aqui é um mock visual temporário.
+    // No futuro, aqui você faria um fetch(getOrderDetails) para pegar o QR code real do PIX
     const timer = setTimeout(() => setLoading(false), 1200);
     return () => clearTimeout(timer);
   }, []);
@@ -41,7 +43,21 @@ export default function PaymentPage() {
     const fakePixCode =
       "00020101021226870014br.gov.bcb.pix25650021br.mercadopago.mock123456";
     await Clipboard.setStringAsync(fakePixCode);
-    Alert.alert("Sucesso!", "Código copiado. Agora é só colar no seu banco.");
+
+    Toast.show({
+      type: "success",
+      text1: "Código copiado!",
+      text2: "Agora é só colar no app do seu banco.",
+    });
+  };
+
+  const handleFinishPayment = () => {
+    if (method === "credit_card") {
+      Toast.show({ type: "success", text1: "Pagamento enviado com sucesso!" });
+      router.replace("/(tabs)/home");
+    } else {
+      router.replace("/(tabs)/home");
+    }
   };
 
   if (loading) {
@@ -57,7 +73,7 @@ export default function PaymentPage() {
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <Stack.Screen
         options={{
-          headerShown: false, // Vamos usar um cabeçalho customizado dentro do scroll ou SafeArea
+          headerShown: false,
         }}
       />
 
@@ -170,7 +186,7 @@ export default function PaymentPage() {
                     placeholderTextColor="#999"
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={styles.inputLabel}>CVV</Text>
                   <TextInput
                     style={styles.input}
@@ -199,11 +215,7 @@ export default function PaymentPage() {
         {/* Botão de Ação Final */}
         <TouchableOpacity
           style={styles.mainButton}
-          onPress={() =>
-            method === "card"
-              ? Alert.alert("Sucesso", "Pagamento enviado!")
-              : router.replace("/")
-          }
+          onPress={handleFinishPayment}
         >
           <MaterialCommunityIcons
             name={method === "pix" ? "check-bold" : "credit-card-check"}

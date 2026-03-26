@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import * as ImagePicker from "expo-image-picker"; // IMPORTANTE
+import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 
 import { styles } from "../../styles/profile.styles";
@@ -46,7 +46,7 @@ export default function ProfileScreen() {
     async function loadProfile() {
       const name = await AsyncStorage.getItem("@hema_user_name");
       const email = await AsyncStorage.getItem("@hema_user_email");
-      const avatarUrl = await AsyncStorage.getItem("@hema_user_avatar"); // Busca a foto salva localmente
+      const avatarUrl = await AsyncStorage.getItem("@hema_user_avatar");
 
       if (name && email) {
         setUser({ name, email, avatarUrl });
@@ -57,12 +57,17 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = async () => {
-    try {
-      await logout();
+    const response = await logout();
+
+    if (response.success) {
       await AsyncStorage.clear();
       router.replace("/auth");
-    } catch (error) {
-      console.log(error);
+    } else {
+      Toast.show({
+        type: "error",
+        text1: "Erro ao sair",
+        text2: response.message,
+      });
     }
   };
 
@@ -96,13 +101,15 @@ export default function ProfileScreen() {
         name: asset.fileName || `avatar-${Date.now()}.jpg`,
       };
 
-      // Mandamos o objeto inteiro para a service
       const response = await uploadAvatar(fileData);
 
       if (response.success && response.data) {
-        setUser((prev) => ({ ...prev, avatarUrl: response.data }));
-        await AsyncStorage.setItem("@hema_user_avatar", response.data);
-        Toast.show({ type: "success", text1: "Foto atualizada com sucesso!" });
+        setUser((prev) => ({ ...prev, avatarUrl: response.data as string }));
+        await AsyncStorage.setItem(
+          "@hema_user_avatar",
+          response.data as string,
+        );
+        Toast.show({ type: "success", text1: response.message });
       } else {
         Toast.show({ type: "error", text1: "Ops!", text2: response.message });
       }

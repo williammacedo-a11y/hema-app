@@ -1,19 +1,7 @@
 import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createClient } from "@supabase/supabase-js";
-
-export const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL!,
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!,
-  {
-    auth: {
-      storage: AsyncStorage,
-      autoRefreshToken: true,
-      persistSession: true,
-      detectSessionInUrl: false,
-    },
-  },
-);
+import { apiFetch, ApiResponse } from "./api";
+import { supabase } from "./supabase";
 
 const saveUserCache = async (name: string, email: string) => {
   try {
@@ -24,39 +12,56 @@ const saveUserCache = async (name: string, email: string) => {
   }
 };
 
-export async function signup(email: string, password: string, name: string) {
+const translateAuthError = (errorMsg: string) => {
+  if (errorMsg.includes("Invalid login credentials"))
+    return "E-mail ou senha incorretos.";
+  if (errorMsg.includes("User already registered"))
+    return "Este e-mail já está cadastrado.";
+  if (errorMsg.includes("Password should be")) return "A senha é muito fraca.";
+  return "Ocorreu um erro de autenticação.";
+};
+
+export async function signup(
+  email: string,
+  password: string,
+  name: string,
+): Promise<ApiResponse<any>> {
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: { data: { name } },
   });
 
-  if (error) throw error;
-
-  if (data.user?.user_metadata?.name) {
-    await saveUserCache(
-      data.user.user_metadata.name,
-      data.user.user_metadata.email,
-    );
+  if (error) {
+    return { success: false, message: translateAuthError(error.message) };
   }
 
-  return data;
+  if (data.user?.user_metadata?.name) {
+    await saveUserCache(data.user.user_metadata.name, email);
+  }
+
+  return { success: true, message: "Conta criada com sucesso!", data };
 }
 
-export async function login(email: string, password: string) {
+export async function login(
+  email: string,
+  password: string,
+): Promise<ApiResponse<any>> {
   const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
 
-  if (error) throw error;
+  if (error) {
+    return { success: false, message: translateAuthError(error.message) };
+  }
 
   const userName = data.user?.user_metadata?.name;
   if (userName) {
-    await saveUserCache(userName, data.user.user_metadata.email);
+    await saveUserCache(userName, email);
   }
 
-  return data;
+  return { success: true, message: "Login realizado com sucesso!", data };
 }
 
 export async function updateUserProfile(updates: {
@@ -65,65 +70,71 @@ export async function updateUserProfile(updates: {
   password?: string;
   phone?: string;
   cpf?: string;
-}) {
+}): Promise<ApiResponse<any>> {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) throw new Error("Sessão expirada. Faça login novamente.");
+
+  if (!user) {
+    return {
+      success: false,
+      message: "Sessão expirada. Faça login novamente.",
+    };
+  }
 
   const { data: authData, error: authError } = await supabase.auth.updateUser({
     email: updates.email,
     password: updates.password,
-    data: {
-      name: updates.name,
-      phone: updates.phone,
-      cpf: updates.cpf,
-    },
+    data: { name: updates.name },
   });
 
-  if (authError) throw authError;
+  if (authError) {
+    return { success: false, message: translateAuthError(authError.message) };
+  }
 
-  const apiUrl = process.env.EXPO_PUBLIC_API_URL;
-
-  const response = await fetch(`${apiUrl}/profile/${user.id}`, {
+  const response = await apiFetch("/profile", {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-    },
     body: JSON.stringify({
       name: updates.name,
       phone: updates.phone,
+      cpf: updates.cpf,
     }),
   });
 
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(
-      errorData.message || "Erro ao atualizar perfil no backend.",
-    );
+  if (!response.success) {
+    return response;
   }
 
   if (authData.user) {
     const newName = authData.user.user_metadata?.name || updates.name;
     const newEmail = authData.user.email || updates.email;
-    await saveUserCache(newName, newEmail!);
+    await saveUserCache(newName!, newEmail!);
   }
 
-  return authData;
+  return {
+    success: true,
+    message: "Perfil atualizado com sucesso!",
+    data: authData,
+  };
 }
 
-export async function getCurrentUser() {
+export async function getCurrentUser(): Promise<ApiResponse<any>> {
   const {
     data: { user },
     error,
   } = await supabase.auth.getUser();
-  if (error) throw error;
-  return user;
+
+  if (error || !user) {
+    return { success: false, message: "Usuário não logado" };
+  }
+
+  return { success: true, message: "Sessão ativa", data: user };
 }
 
-export async function logout() {
+export async function logout(): Promise<ApiResponse<void>> {
   await supabase.auth.signOut();
-
   await AsyncStorage.removeItem("@hema_user_name");
   await AsyncStorage.removeItem("@hema_user_email");
+
+  return { success: true, message: "Você saiu da sua conta." };
 }

@@ -6,7 +6,6 @@ import {
   ActivityIndicator,
   ScrollView,
   RefreshControl,
-  StyleSheet,
   StatusBar,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -23,16 +22,18 @@ export default function OrdersListScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchOrders = async (isInitial = false) => {
-    try {
-      if (isInitial) setLoading(true); 
-      const data = await OrdersService.getUserOrders();
-      setOrders(data);
-    } catch (error) {
-      console.error("Erro ao carregar pedidos:", error);
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+    if (isInitial) setLoading(true);
+
+    const response = await OrdersService.getUserOrders();
+
+    if (response.success && response.data) {
+      setOrders(response.data);
+    } else {
+      console.log("Falha ao carregar lista de pedidos:", response.message);
     }
+
+    setLoading(false);
+    setRefreshing(false);
   };
 
   useFocusEffect(

@@ -31,25 +31,26 @@ export default function PersonalDetailsScreen() {
 
   useEffect(() => {
     async function loadData() {
-      try {
-        const user = await getCurrentUser();
-        if (user) setEmail(user.email || "");
+      const userResponse = await getCurrentUser();
+      if (userResponse.success && userResponse.data) {
+        setEmail(userResponse.data.email || "");
+      }
 
-        const profileResponse = await getProfileData();
+      const profileResponse = await getProfileData();
 
-        if (profileResponse.success && profileResponse.data) {
-          setName(profileResponse.data.name || "");
-          setPhone(profileResponse.data.phone || "");
-          setCpf(profileResponse.data.cpf || "");
-        }
-      } catch (error) {
+      if (profileResponse.success && profileResponse.data) {
+        setName(profileResponse.data.name || "");
+        setPhone(profileResponse.data.phone || "");
+        setCpf(profileResponse.data.cpf || "");
+      } else {
         Toast.show({
           type: "error",
-          text1: "Erro ao carregar dados do usuário",
+          text1: "Erro ao carregar dados",
+          text2: profileResponse.message,
         });
-      } finally {
-        setLoading(false);
       }
+
+      setLoading(false);
     }
     loadData();
   }, []);
@@ -74,7 +75,6 @@ export default function PersonalDetailsScreen() {
 
     if (response.success) {
       try {
-        await AsyncStorage.removeItem("@hema_user_name");
         await AsyncStorage.setItem("@hema_user_name", name);
       } catch (e) {
         console.error("Erro ao salvar no AsyncStorage", e);
@@ -93,9 +93,8 @@ export default function PersonalDetailsScreen() {
         text1: "Erro ao salvar",
         text2: response.message,
       });
+      setSaving(false);
     }
-
-    setSaving(false);
   };
 
   if (loading) {
@@ -137,6 +136,7 @@ export default function PersonalDetailsScreen() {
             onChangeText={setName}
             autoCorrect={false}
             placeholder="Digite seu nome"
+            editable={!saving}
           />
         </View>
 
@@ -146,9 +146,9 @@ export default function PersonalDetailsScreen() {
             style={[
               styles.input,
               { backgroundColor: "#F5F5F5", color: "#888" },
-            ]} // E-mail geralmente é readonly em profiles simples
+            ]}
             value={email}
-            editable={false} // Mantendo desabilitado para evitar conflito com Auth sem re-autenticação
+            editable={false}
           />
         </View>
 
@@ -160,6 +160,7 @@ export default function PersonalDetailsScreen() {
             keyboardType="phone-pad"
             value={phone}
             onChangeText={setPhone}
+            editable={!saving}
           />
         </View>
 
@@ -171,7 +172,8 @@ export default function PersonalDetailsScreen() {
             keyboardType="numeric"
             value={cpf}
             onChangeText={setCpf}
-            maxLength={14} // Bom colocar limite pra evitar lixo no banco
+            maxLength={14}
+            editable={!saving}
           />
         </View>
       </ScrollView>

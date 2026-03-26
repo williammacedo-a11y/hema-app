@@ -26,22 +26,23 @@ export default function OrderDetailsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchOrderDetails = async (isInitial = true) => {
-    try {
-      if (isInitial) setLoading(true); // Só ativa o loader central se for a primeira carga
-      const data = await OrdersService.getOrderDetails(id);
-      setOrder(data);
-    } catch (error) {
-      console.error("Erro ao carregar pedido:", error);
+    if (isInitial) setLoading(true); 
+
+    const response = await OrdersService.getOrderDetails(id);
+
+    if (response.success && response.data) {
+      setOrder(response.data);
+    } else {
       Toast.show({
         type: "error",
         text1: "Ops!",
-        text2: "Não foi possível carregar o pedido.",
+        text2: response.message || "Não foi possível carregar o pedido.",
       });
       router.back();
-    } finally {
-      setLoading(false);
-      setRefreshing(false); // Garante que o spinner de topo pare
     }
+
+    setLoading(false);
+    setRefreshing(false);
   };
 
   useEffect(() => {
@@ -63,27 +64,26 @@ export default function OrderDetailsScreen() {
           text: "Sim, cancelar",
           style: "destructive",
           onPress: async () => {
-            try {
-              setCanceling(true);
-              await OrdersService.cancelOrder(id);
+            setCanceling(true);
 
-              // SUBSTITUÍDO: Toast de Sucesso no lugar do Alert
+            // 🔴 NOVO PADRÃO: Chamada limpa
+            const response = await OrdersService.cancelOrder(id);
+
+            setCanceling(false);
+
+            if (response.success) {
               Toast.show({
                 type: "success",
                 text1: "Pedido Cancelado",
-                text2: "O seu pedido foi cancelado com sucesso.",
+                text2: response.message, // "Pedido cancelado com sucesso."
               });
-
-              fetchOrderDetails(); // Recarrega para atualizar o status na tela
-            } catch (error: any) {
-              // SUBSTITUÍDO: Toast de Erro no lugar do Alert
+              fetchOrderDetails(false); // Recarrega silenciosamente para atualizar a badge da tela
+            } else {
               Toast.show({
                 type: "error",
                 text1: "Erro ao cancelar",
-                text2: error.message || "Tente novamente mais tarde.",
+                text2: response.message, // Ex: "Este pedido já está em processamento."
               });
-            } finally {
-              setCanceling(false);
             }
           },
         },
@@ -123,7 +123,7 @@ export default function OrderDetailsScreen() {
   }
 
   const badge = getStatusBadge(order.status);
-  const isPickup = !order.addresses; // Se não tem address, é retirada
+  const isPickup = !order.addresses; 
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
@@ -257,7 +257,6 @@ export default function OrderDetailsScreen() {
         </View>
       </ScrollView>
 
-      {/* BOTÃO DE CANCELAR (Se pendente) */}
       {order.status === "pending" && (
         <View style={styles.footer}>
           <TouchableOpacity

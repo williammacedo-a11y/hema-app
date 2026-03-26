@@ -19,7 +19,6 @@ import { Swipeable } from "react-native-gesture-handler";
 
 import { styles } from "../../styles/cart.styles";
 import { useCart } from "@/context/CartContext";
-import { CartItemWithProduct } from "@/types/cart";
 import { CartItemSkeleton } from "@/components/CartItemSkeleton";
 import { PriceSkeleton } from "@/components/PriceSkeleton";
 
@@ -37,6 +36,7 @@ const CartItemComponent = ({
     item.product.type === "unit"
       ? item.product.price || 0
       : item.product.price_per_kg || 0;
+
   const itemTotalPrice =
     item.product.type === "unit"
       ? parseFloat(basePrice.toString()) * (item.quantity || 0)
@@ -215,20 +215,14 @@ export default function CartScreen() {
 
   const handleRemoveItem = async (id: string) => {
     setIsCalculating(true);
-    try {
-      await removeItem(id);
-    } finally {
-      setIsCalculating(false);
-    }
+    await removeItem(id);
+    setIsCalculating(false);
   };
 
   const handleUpdateItem = async (id: string, data: any) => {
     setIsCalculating(true);
-    try {
-      await updateItem(id, data);
-    } finally {
-      setIsCalculating(false);
-    }
+    await updateItem(id, data);
+    setIsCalculating(false);
   };
 
   function validateWeight(weight: number) {
@@ -249,8 +243,8 @@ export default function CartScreen() {
     return (
       <CartItemComponent
         item={item}
-        updateItem={handleUpdateItem} 
-        removeItem={handleRemoveItem} 
+        updateItem={handleUpdateItem}
+        removeItem={handleRemoveItem}
         validateWeight={validateWeight}
       />
     );
@@ -266,7 +260,6 @@ export default function CartScreen() {
             <Text style={styles.headerTitle}>Meu Carrinho</Text>
           </View>
 
-          {/* 🚀 MÁGICA NA FLATLIST: Não desmontamos ela, só trocamos os dados */}
           <FlatList
             data={showListSkeleton ? [1, 2, 3] : items}
             renderItem={renderCartItem}
@@ -301,7 +294,6 @@ export default function CartScreen() {
               <View style={styles.subtotalRow}>
                 <Text style={styles.subtotalLabel}>Subtotal</Text>
 
-                {/* 🚀 SKELETON DO SUBTOTAL COM ISCALCULATING */}
                 {showPriceSkeleton ? (
                   <PriceSkeleton />
                 ) : (
@@ -321,7 +313,7 @@ export default function CartScreen() {
                 ]}
                 activeOpacity={0.8}
                 onPress={() => router.push("/checkout")}
-                disabled={showPriceSkeleton} // Evita finalizar compra enquanto recalcula
+                disabled={showPriceSkeleton}
               >
                 <Text style={styles.checkoutButtonText}>Finalizar Compra</Text>
               </TouchableOpacity>

@@ -8,7 +8,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  ActivityIndicator,
   RefreshControl,
 } from "react-native";
 
@@ -24,6 +23,7 @@ export default function ProductDetailsScreen() {
   const router = useRouter();
   const { addItem } = useCart();
   const { id } = useLocalSearchParams<{ id: string }>();
+
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [similarProducts, setSimilarProducts] = useState<Product[]>([]);
@@ -32,13 +32,21 @@ export default function ProductDetailsScreen() {
 
   async function fetchData() {
     if (!id) return;
-    const [productData, similarData] = await Promise.all([
-      getProductById(id),
-      getSimilarProducts(id),
+
+    const [productRes, similarRes] = await Promise.all([
+      getProductById(id as string),
+      getSimilarProducts(id as string),
     ]);
 
-    if (productData) setProduct(productData);
-    setSimilarProducts(similarData);
+    if (productRes.success && productRes.data) {
+      setProduct(productRes.data);
+    } else {
+      Toast.show({ type: "error", text1: "Oops!", text2: productRes.message });
+    }
+
+    if (similarRes.success && similarRes.data) {
+      setSimilarProducts(similarRes.data);
+    }
   }
 
   useEffect(() => {
@@ -52,21 +60,19 @@ export default function ProductDetailsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await fetchData(); // Recarrega os dados sem mostrar o loader de tela cheia
+    await fetchData();
     setRefreshing(false);
   };
 
   if (loading) {
     return (
       <>
-        {/* Mantemos o botão de voltar funcional por cima do skeleton */}
         <TouchableOpacity
           style={[styles.header, { backgroundColor: "#FFF" }]}
           onPress={() => router.back()}
         >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
-
         <ProductDetailsSkeleton />
       </>
     );
@@ -85,7 +91,7 @@ export default function ProductDetailsScreen() {
           onPress={() => router.back()}
           style={{ marginTop: 20 }}
         >
-          <Text style={{ color: "#E31837" }}>Voltar</Text>
+          <Text style={{ color: "#E31837", fontWeight: "bold" }}>Voltar</Text>
         </TouchableOpacity>
       </View>
     );
@@ -94,28 +100,13 @@ export default function ProductDetailsScreen() {
   const handleAddToCart = async () => {
     if (!product) return;
 
-    try {
-      const payload = {
-        product_id: product.id,
-        price: product.type === "unit" ? product.price : product.price_per_kg,
-        ...(product.type === "unit" ? { quantity: 1 } : { weight: 50 }),
-      };
+    const payload = {
+      product_id: product.id,
+      price: product.type === "unit" ? product.price : product.price_per_kg,
+      ...(product.type === "unit" ? { quantity: 1 } : { weight: 50 }),
+    };
 
-      Toast.show({
-        type: "success",
-        text1: "Produto adicionado ao carrinho!",
-        text2: `${product.name} foi salvo.`,
-      });
-
-      await addItem(payload);
-    } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: "Erro ao adicionar",
-        text2: "Tente novamente em instantes.",
-      });
-      console.error("Erro ao adicionar ao carrinho:", error);
-    }
+    await addItem(payload);
   };
 
   return (

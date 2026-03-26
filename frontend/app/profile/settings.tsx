@@ -19,7 +19,6 @@ import { updateProfile, deleteAccount } from "@/services/profile";
 export default function SettingsScreen() {
   const router = useRouter();
 
-  const [userId, setUserId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState(true);
   const [promotions, setPromotions] = useState(false);
 
@@ -28,31 +27,26 @@ export default function SettingsScreen() {
 
   useEffect(() => {
     async function loadSettings() {
-      try {
-        const user = await getCurrentUser();
-        if (user) {
-          setUserId(user.id);
-          // Se o seu backend já retornar as settings no metadata ou profiles:
-          const userSettings = user.user_metadata?.settings;
-          if (userSettings) {
-            setNotifications(userSettings.notifications ?? true);
-            setPromotions(userSettings.promotions ?? false);
-          }
+      const response = await getCurrentUser();
+
+      if (response.success && response.data) {
+        const user = response.data;
+        const userSettings = user.user_metadata?.settings;
+        if (userSettings) {
+          setNotifications(userSettings.notifications ?? true);
+          setPromotions(userSettings.promotions ?? false);
         }
-      } catch (error) {
-        Toast.show({ type: "error", text1: "Erro ao carregar configurações" });
-      } finally {
-        setLoading(false);
       }
+
+      setLoading(false);
     }
     loadSettings();
   }, []);
 
   const handleSaveSettings = async () => {
-    if (!userId) return;
     setSaving(true);
 
-    const response = await updateProfile(userId, {
+    const response = await updateProfile({
       settings: {
         notifications,
         promotions,
@@ -81,8 +75,8 @@ export default function SettingsScreen() {
           text: "Excluir",
           style: "destructive",
           onPress: async () => {
-            if (!userId) return;
-            const response = await deleteAccount(userId);
+            const response = await deleteAccount();
+
             if (response.success) {
               Toast.show({ type: "success", text1: "Conta removida." });
               router.replace("/auth");

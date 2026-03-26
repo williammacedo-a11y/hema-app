@@ -6,7 +6,7 @@ import {
 } from "@react-navigation/native";
 import { useFonts } from "expo-font";
 import { Stack, useRouter, useSegments } from "expo-router";
-import { supabase } from "@/services/auth";
+import { supabase } from "@/services/supabase";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect, useState } from "react";
 import "react-native-reanimated";
@@ -73,27 +73,22 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (!isAuthReady) return;
 
-    // A forma mais segura de evitar loops no Expo Router é olhar apenas
-    // para o PRIMEIRO segmento (o grupo principal)
     const inAuthGroup = segments[0] === "auth";
 
     if (session && inAuthGroup) {
-      // Tem sessão salva e caiu na tela de Login? Vai direto pra Home!
       router.replace("/(tabs)/home");
     } else if (!session && !inAuthGroup) {
-      // Sem sessão e está tentando acessar a Home ou Carrinho? Volta pro Login!
       router.replace("/auth");
     }
-
-    // ⬅️ O segments PRECISA ficar aqui para o router reagir quando terminar de carregar
   }, [session, isAuthReady, segments]);
 
   if (!isAuthReady) {
-    return null; // Oculta tudo até o Supabase responder se tem token ou não
+    return null;
   }
 
   return <>{children}</>;
 }
+
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
 

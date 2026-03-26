@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
-import { Toast } from "@/util/toast";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { styles } from "@/styles/home.styles";
@@ -39,31 +38,17 @@ export default function HomeScreen() {
   const [hasMoreSearch, setHasMoreSearch] = useState(true);
 
   const handleAddToCart = async (product: Product) => {
-    try {
-      const isKg =
-        product.price_per_kg !== null && product.price_per_kg !== undefined;
-      const isUnit = product.type === "unit" || !isKg;
+    const isKg =
+      product.price_per_kg !== null && product.price_per_kg !== undefined;
+    const isUnit = product.type === "unit" || !isKg;
 
-      const payload = {
-        product_id: product.id,
-        price: isUnit ? product.price : product.price_per_kg,
-        ...(isUnit ? { quantity: 1 } : { weight: 50 }),
-      };
+    const payload = {
+      product_id: product.id,
+      price: isUnit ? product.price : product.price_per_kg,
+      ...(isUnit ? { quantity: 1 } : { weight: 50 }),
+    };
 
-      Toast.show({
-        type: "success",
-        text1: "Produto adicionado ao carrinho!",
-        text2: `${product.name} foi salvo.`,
-      });
-
-      await addItem(payload);
-    } catch (error) {
-      Toast.show({
-        type: "error",
-        text1: "Não foi possível adicionar o item.",
-      });
-      console.error("Erro ao adicionar ao carrinho:", error);
-    }
+    await addItem(payload);
   };
 
   const handleSearch = async (query: string) => {
@@ -75,39 +60,40 @@ export default function HomeScreen() {
       return;
     }
 
-    try {
-      setIsSearching(true);
-      const results = await searchProducts(query, SEARCH_LIMIT, 0);
-      setSearchResults(results);
+    setIsSearching(true);
+
+    const response = await searchProducts(query, SEARCH_LIMIT, 0);
+
+    if (response.success && response.data) {
+      setSearchResults(response.data);
       setSearchOffset(0);
-      setHasMoreSearch(results.length === SEARCH_LIMIT);
-    } catch (err) {
-      console.error("Erro na busca:", err);
-    } finally {
-      setIsSearching(false);
+      setHasMoreSearch(response.data.length === SEARCH_LIMIT);
+    } else {
+      setSearchResults([]);
     }
+
+    setIsSearching(false);
   };
 
   const loadMoreSearchResults = async () => {
     if (!hasMoreSearch || isSearchingMore || !searchQuery.trim()) return;
 
-    try {
-      setIsSearchingMore(true);
-      const nextOffset = searchOffset + SEARCH_LIMIT;
-      const results = await searchProducts(
-        searchQuery,
-        SEARCH_LIMIT,
-        nextOffset,
-      );
+    setIsSearchingMore(true);
+    const nextOffset = searchOffset + SEARCH_LIMIT;
 
-      setSearchResults((prev) => [...prev, ...results]);
+    const response = await searchProducts(
+      searchQuery,
+      SEARCH_LIMIT,
+      nextOffset,
+    );
+
+    if (response.success && response.data) {
+      setSearchResults((prev) => [...prev, ...(response.data || [])]);
       setSearchOffset(nextOffset);
-      setHasMoreSearch(results.length === SEARCH_LIMIT);
-    } catch (err) {
-      console.error("Erro ao carregar mais resultados:", err);
-    } finally {
-      setIsSearchingMore(false);
+      setHasMoreSearch(response.data.length === SEARCH_LIMIT);
     }
+
+    setIsSearchingMore(false);
   };
 
   return (
@@ -123,7 +109,6 @@ export default function HomeScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            // Se quiser que o ícone de loading "suma" ou fique discreto:
             colors={refreshing && catalog ? ["transparent"] : ["#E31837"]}
             tintColor={refreshing && catalog ? "transparent" : "#E31837"}
           />
@@ -143,9 +128,8 @@ export default function HomeScreen() {
         ) : searchQuery.trim() !== "" ? (
           /* 2. EXIBIÇÃO DOS RESULTADOS DA BUSCA */
           <View style={styles.sectionContainer}>
-            {/* Cabeçalho de Feedback da Busca */}
             {searchResults.length > 0 &&
-            (searchResults[0].similarity_score ?? 0) < 0.3 ? (
+            (searchResults[0].similarity_score ?? 1) < 0.3 ? (
               <View style={{ marginBottom: 10 }}>
                 <Text style={styles.sectionTitle}>
                   Poxa, não encontramos "{searchQuery}"
@@ -201,7 +185,7 @@ export default function HomeScreen() {
                   ))}
                 </View>
 
-                {/* 🚀 O BOTÃO VOLTOU AQUI: */}
+                {/* BOTÃO MOSTRAR MAIS */}
                 {hasMoreSearch && (
                   <View style={{ paddingVertical: 30, alignItems: "center" }}>
                     {isSearchingMore ? (
@@ -243,7 +227,6 @@ export default function HomeScreen() {
             ))}
           </View>
         ) : (
-          /* 3. CONTEÚDO REAL DO CATÁLOGO (Só aparece quando catalog existe e refreshing é false) */
           catalog?.map((category) => {
             if (!category.products || category.products.length === 0)
               return null;

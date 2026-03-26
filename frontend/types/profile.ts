@@ -10,9 +10,3 @@ export interface SupportRequest {
   subject: string;
   message: string;
 }
-
-export interface ServiceResponse {
-  success: boolean;
-  message: string;
-  data?: any;
-}
