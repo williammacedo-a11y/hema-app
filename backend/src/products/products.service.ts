@@ -1,94 +1,141 @@
-import { Injectable } from '@nestjs/common';
-import { supabase } from 'src/lib/supabase';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { supabase } from '../lib/supabase';
 
 @Injectable()
 export class ProductsService {
   async getHomeCatalog() {
-    const targetCategories = [
-      'Whey',
-      'Creatina',
-      'Snacks e Barras',
-      'Vitaminas',
-      'Pré-Treinos',
-      'Veganos',
-      'Chás e Ervas',
-      'Colágenos',
-      'Cereais e Grãos',
-      'Sementes',
-    ];
+    try {
+      const targetCategories = [
+        'Whey',
+        'Creatina',
+        'Snacks e Barras',
+        'Vitaminas',
+        'Pré-Treinos',
+        'Veganos',
+        'Chás e Ervas',
+        'Colágenos',
+        'Cereais e Grãos',
+        'Sementes',
+      ];
 
-    const { data, error } = await supabase
-      .from('categories')
-      .select(
-        `
-      id,
-      name,
-      products (
-        id,
-        name,
-        price,
-        price_per_kg,
-        image_url,
-        type
-      )
-    `,
-      )
-      .in('name', targetCategories)
-      .not('products.image_url', 'is', null)
-      .limit(10, { foreignTable: 'products' })
-      .order('name', { ascending: false });
+      const { data, error } = await supabase
+        .from('categories')
+        .select(
+          `
+          id,
+          name,
+          products (
+            id, name, price, price_per_kg, image_url, type
+          )
+        `,
+        )
+        .in('name', targetCategories)
+        .not('products.image_url', 'is', null)
+        .limit(10, { foreignTable: 'products' })
+        .order('name', { ascending: false });
 
-    if (error) {
-      throw new Error(`Erro Supabase: ${error.message}`);
+      if (error) throw error;
+
+      return {
+        success: true,
+        message: 'Catálogo carregado com sucesso',
+        data,
+      };
+    } catch (error: any) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Erro ao carregar o catálogo',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
-
-    return data;
   }
 
   async findOne(id: string) {
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', id)
-      .single();
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-    if (error) {
-      console.error('❌ Erro detalhado do Supabase:', error);
-      throw new Error(`Erro Supabase: ${error.message}`);
+      if (error || !data) {
+        throw new HttpException(
+          { success: false, message: 'Produto não encontrado.' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      return {
+        success: true,
+        message: 'Produto encontrado',
+        data: {
+          id: data.id,
+          name: data.name,
+          description: data.description,
+          type: data.type,
+          price: data.price,
+          price_per_kg: data.price_per_kg,
+          image_url: data.image_url,
+        },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Erro ao buscar detalhes do produto',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
-
-    if (error || !data) throw new Error('Produto não encontrado');
-
-    return {
-      id: data.id,
-      name: data.name,
-      description: data.description,
-      type: data.type,
-      price: data.price,
-      price_per_kg: data.price_per_kg,
-      image_url: data.image_url,
-    };
   }
 
   async findSimilar(productId: string) {
-    const { data: product, error } = await supabase
-      .from('products')
-      .select('id, name, category_id')
-      .eq('id', productId)
-      .single();
+    try {
+      // 1. Pega a categoria do produto atual
+      const { data: product, error } = await supabase
+        .from('products')
+        .select('id, category_id')
+        .eq('id', productId)
+        .single();
 
-    if (error) throw new Error(error.message);
+      if (error || !product) {
+        throw new HttpException(
+          { success: false, message: 'Produto base não encontrado.' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
 
-    const { data, error: error2 } = await supabase
-      .from('products')
-      .select('id, name, price, price_per_kg, image_url, type')
-      .eq('category_id', product.category_id)
-      .neq('id', productId)
-      .limit(10);
+      // 2. Busca produtos da mesma categoria, excluindo o próprio produto
+      const { data, error: error2 } = await supabase
+        .from('products')
+        .select('id, name, price, price_per_kg, image_url, type')
+        .eq('category_id', product.category_id)
+        .neq('id', productId)
+        .limit(10);
 
-    if (error2) throw new Error(error2.message);
+      if (error2) throw error2;
 
-    return data;
+      return {
+        success: true,
+        message: 'Produtos similares encontrados',
+        data: data || [],
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Erro ao buscar produtos similares',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   async findCategoryProducts(
@@ -96,16 +143,31 @@ export class ProductsService {
     limit: number,
     offset: number,
   ) {
-    const to = offset + limit - 1;
+    try {
+      const to = offset + limit - 1;
 
-    const { data, error } = await supabase
-      .from('products')
-      .select('id, name, price, price_per_kg, image_url, type')
-      .eq('category_id', categoryId)
-      .range(offset, to);
+      const { data, error } = await supabase
+        .from('products')
+        .select('id, name, price, price_per_kg, image_url, type')
+        .eq('category_id', categoryId)
+        .range(offset, to);
 
-    if (error) throw new Error(error.message);
+      if (error) throw error;
 
-    return data;
+      return {
+        success: true,
+        message: 'Produtos da categoria carregados',
+        data: data || [],
+      };
+    } catch (error: any) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Erro ao buscar produtos desta categoria',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

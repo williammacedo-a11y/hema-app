@@ -1,253 +1,306 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { AddCartItemDto } from './dto/create-cart.dto';
 import { UpdateCartItemDto } from './dto/update-cart.dto';
-import { supabase } from 'src/lib/supabase';
+import { supabase } from '../lib/supabase';
 
 @Injectable()
 export class CartService {
   async addItem(userId: string, dto: AddCartItemDto) {
-    const { product_id, quantity, weight } = dto;
+    try {
+      const { product_id, quantity, weight } = dto;
 
-    const { data: product, error: productError } = await supabase
-      .from('products')
-      .select('*')
-      .eq('id', product_id)
-      .maybeSingle();
-
-    if (productError || !product) {
-      throw new Error('Produto não encontrado');
-    }
-
-    if (product.type === 'unit' && !quantity) {
-      throw new Error('Quantidade é obrigatória para produtos unitários');
-    }
-
-    if (product.type === 'weight' && !weight) {
-      throw new Error('Peso é obrigatório para produtos por peso');
-    }
-
-    // 3️⃣ buscar ou criar carrinho
-    let { data: cart } = await supabase
-      .from('carts')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (!cart) {
-      const { data: newCart, error: cartError } = await supabase
-        .from('carts')
-        .insert({
-          user_id: userId,
-          total_price: 0,
-        })
-        .select()
+      const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('*')
+        .eq('id', product_id)
         .maybeSingle();
 
-      if (cartError) throw new Error('Falha ao criar carrinho');
-      cart = newCart;
-    }
+      if (productError || !product) {
+        throw new HttpException(
+          { success: false, message: 'Produto não encontrado no catálogo' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
 
-    // 4️⃣ verificar se item já existe
-    const { data: existingItem } = await supabase
-      .from('cart_items')
-      .select('*')
-      .eq('cart_id', cart.id)
-      .eq('product_id', product_id)
-      .maybeSingle();
+      if (product.type === 'unit' && !quantity) {
+        throw new HttpException(
+          {
+            success: false,
+            message: 'Quantidade é obrigatória para este produto',
+          },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
 
-    if (existingItem) {
-      const newQuantity =
-        product.type === 'unit'
-          ? existingItem.quantity + (quantity || 0)
-          : null;
+      if (product.type === 'weight' && !weight) {
+        throw new HttpException(
+          { success: false, message: 'O peso é obrigatório para este produto' },
+          HttpStatus.BAD_REQUEST,
+        );
+      }
 
-      const newWeight =
-        product.type === 'weight' ? existingItem.weight + (weight || 0) : null;
+      // Buscar ou criar carrinho
+      let { data: cart } = await supabase
+        .from('carts')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
 
-      let updatedPrice = 0;
-      if (product.type === 'unit') {
-        updatedPrice = product.price;
+      if (!cart) {
+        const { data: newCart, error: cartError } = await supabase
+          .from('carts')
+          .insert({ user_id: userId, total_price: 0 })
+          .select()
+          .maybeSingle();
+
+        if (cartError) throw cartError;
+        cart = newCart;
+      }
+
+      // Verificar se item já existe no carrinho
+      const { data: existingItem } = await supabase
+        .from('cart_items')
+        .select('*')
+        .eq('cart_id', cart.id)
+        .eq('product_id', product_id)
+        .maybeSingle();
+
+      if (existingItem) {
+        const newQuantity =
+          product.type === 'unit'
+            ? existingItem.quantity + (quantity || 0)
+            : null;
+        const newWeight =
+          product.type === 'weight'
+            ? existingItem.weight + (weight || 0)
+            : null;
+
+        let updatedPrice = 0;
+        if (product.type === 'unit') {
+          updatedPrice = product.price; // Preço unitário base
+        } else {
+          updatedPrice = (product.price_per_kg / 1000) * (newWeight || 0); // Preço total por peso
+        }
+
+        await supabase
+          .from('cart_items')
+          .update({
+            quantity: newQuantity,
+            weight: newWeight,
+            price: updatedPrice,
+          })
+          .eq('id', existingItem.id);
       } else {
-        // Correção do erro aqui (usando o newWeight que já está seguro)
-        updatedPrice = (product.price_per_kg / 1000) * (newWeight || 0);
+        let initialPrice = 0;
+        if (product.type === 'unit') {
+          initialPrice = product.price;
+        } else {
+          initialPrice = (product.price_per_kg / 1000) * (weight || 0);
+        }
+
+        await supabase.from('cart_items').insert({
+          cart_id: cart.id,
+          product_id,
+          quantity: quantity || null,
+          weight: weight || null,
+          price: initialPrice,
+        });
+      }
+
+      await this.recalculateCart(cart.id);
+
+      return {
+        success: true,
+        message: 'Produto adicionado ao carrinho',
+        data: { cart_id: cart.id },
+      };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Erro ao adicionar item ao carrinho',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async getCart(userId: string) {
+    try {
+      const { data: cart, error: cartError } = await supabase
+        .from('carts')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (cartError) throw cartError;
+
+      // Retorno padronizado caso o usuário não tenha um carrinho ainda
+      if (!cart) {
+        return {
+          success: true,
+          message: 'Carrinho vazio',
+          data: { cart: null, items: [], total_price: 0 },
+        };
+      }
+
+      const { data: items, error: itemsError } = await supabase
+        .from('cart_items')
+        .select(
+          `
+          id, quantity, weight, price,
+          product:products (id, name, type, image_url, price, price_per_kg)
+        `,
+        )
+        .eq('cart_id', cart.id)
+        .order('id', { ascending: true }); // Boa prática para não mudar a ordem na tela
+
+      if (itemsError) throw itemsError;
+
+      return {
+        success: true,
+        message: 'Carrinho recuperado',
+        data: {
+          cart,
+          items: items ?? [],
+          total_price: cart.total_price,
+        },
+      };
+    } catch (error: any) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Erro ao buscar o carrinho',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
+
+  async updateItem(userId: string, itemId: string, dto: UpdateCartItemDto) {
+    try {
+      const { data: item } = await supabase
+        .from('cart_items')
+        .select('*, product:products(*)')
+        .eq('id', itemId)
+        .maybeSingle();
+
+      if (!item) {
+        throw new HttpException(
+          { success: false, message: 'Item não encontrado no carrinho' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      const { data: cart } = await supabase
+        .from('carts')
+        .select('user_id')
+        .eq('id', item.cart_id)
+        .maybeSingle();
+
+      if (!cart || cart.user_id !== userId) {
+        throw new HttpException(
+          { success: false, message: 'Acesso negado' },
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      let newPrice = item.price;
+      const product = item.product;
+
+      if (dto.quantity !== undefined && product.type === 'unit') {
+        newPrice = product.price;
+      } else if (dto.weight !== undefined && product.type === 'weight') {
+        newPrice = (product.price_per_kg / 1000) * (dto.weight || 0);
       }
 
       await supabase
         .from('cart_items')
         .update({
-          quantity: newQuantity,
-          weight: newWeight,
-          price: updatedPrice,
+          quantity: dto.quantity,
+          weight: dto.weight,
+          price: newPrice,
         })
-        .eq('id', existingItem.id);
-    } else {
-      let initialPrice = 0;
-      if (product.type === 'unit') {
-        initialPrice = product.price;
-      } else {
-        // Correção do erro aqui: adicionando o fallback (weight || 0)
-        initialPrice = (product.price_per_kg / 1000) * (weight || 0);
-      }
+        .eq('id', itemId);
 
-      await supabase.from('cart_items').insert({
-        cart_id: cart.id,
-        product_id,
-        quantity: quantity || null,
-        weight: weight || null,
-        price: initialPrice,
-      });
-    }
+      await this.recalculateCart(item.cart_id);
 
-    await this.recalculateCart(cart.id);
-
-    return {
-      success: true,
-      cart_id: cart.id,
-    };
-  }
-
-  async getCart(userId: string) {
-    // 1️⃣ buscar carrinho do usuário
-    const { data: cart, error: cartError } = await supabase
-      .from('carts')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle();
-
-    if (cartError) {
-      throw new Error('Erro ao buscar carrinho');
-    }
-
-    if (!cart) {
-      return {
-        cart: null,
-        items: [],
-        total_price: 0,
-      };
-    }
-
-    // 2️⃣ buscar itens + produto
-    const { data: items, error: itemsError } = await supabase
-      .from('cart_items')
-      .select(
-        `
-      id,
-      quantity,
-      weight,
-      price,
-      product:products (
-        id,
-        name,
-        type,
-        image_url,
-        price,
-        price_per_kg
-      )
-    `,
-      )
-      .eq('cart_id', cart.id);
-
-    if (itemsError) {
-      throw new Error(
-        'Erro ao buscar itens do carrinho: ' + itemsError.message,
+      return { success: true, message: 'Quantidade atualizada' };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Erro ao atualizar item',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
-
-    return {
-      cart,
-      items: items ?? [],
-      total_price: cart.total_price,
-    };
-  }
-
-  async updateItem(userId: string, itemId: string, dto: UpdateCartItemDto) {
-    const { data: item } = await supabase
-      .from('cart_items')
-      .select('*, product:products(*)') // Precisamos do produto para recalcular o preço
-      .eq('id', itemId)
-      .maybeSingle();
-
-    if (!item) throw new Error('Item não encontrado');
-
-    const { data: cart } = await supabase
-      .from('carts')
-      .select('user_id')
-      .eq('id', item.cart_id)
-      .maybeSingle();
-
-    if (!cart || cart.user_id !== userId) {
-      throw new Error('Item não pertence ao usuário');
-    }
-
-    let newPrice = item.price;
-    const product = item.product;
-
-    if (dto.quantity !== undefined && product.type === 'unit') {
-      newPrice = product.price;
-    } else if (dto.weight !== undefined && product.type === 'weight') {
-      newPrice = (product.price_per_kg / 1000) * (dto.weight || 0);
-    }
-
-    await supabase
-      .from('cart_items')
-      .update({
-        ...dto,
-        price: newPrice,
-      })
-      .eq('id', itemId);
-
-    await this.recalculateCart(item.cart_id);
-
-    return { success: true };
   }
 
   async removeItem(userId: string, itemId: string) {
-    const { data: item } = await supabase
-      .from('cart_items')
-      .select('id, cart_id')
-      .eq('id', itemId)
-      .maybeSingle();
+    try {
+      const { data: item } = await supabase
+        .from('cart_items')
+        .select('id, cart_id')
+        .eq('id', itemId)
+        .maybeSingle();
 
-    if (!item) {
-      throw new Error('Item não encontrado');
+      if (!item) {
+        throw new HttpException(
+          { success: false, message: 'Item não encontrado' },
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      const { data: cart } = await supabase
+        .from('carts')
+        .select('user_id')
+        .eq('id', item.cart_id)
+        .maybeSingle();
+
+      if (!cart || cart.user_id !== userId) {
+        throw new HttpException(
+          { success: false, message: 'Acesso negado' },
+          HttpStatus.FORBIDDEN,
+        );
+      }
+
+      await supabase.from('cart_items').delete().eq('id', itemId);
+      await this.recalculateCart(item.cart_id);
+
+      return { success: true, message: 'Produto removido do carrinho' };
+    } catch (error: any) {
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Erro ao remover item',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
-
-    const { data: cart } = await supabase
-      .from('carts')
-      .select('user_id')
-      .eq('id', item.cart_id)
-      .maybeSingle();
-
-    if (!cart || cart.user_id !== userId) {
-      throw new Error('Item não pertence ao usuário');
-    }
-
-    await supabase.from('cart_items').delete().eq('id', itemId);
-
-    await this.recalculateCart(item.cart_id);
-
-    return { success: true };
   }
 
-  async recalculateCart(cartId: string) {
+  // Método interno, não precisa de retorno HTTP pois é chamado pelas outras funções
+  private async recalculateCart(cartId: string) {
     const { data: items } = await supabase
       .from('cart_items')
-      .select('*, product:products(type)') // Precisamos saber o tipo
+      .select('*, product:products(type)')
       .eq('cart_id', cartId);
 
     const total = (items ?? []).reduce((acc, item) => {
-      // 🔴 CORREÇÃO 4: Lógica de Soma
       if (item.product.type === 'unit' && item.quantity) {
-        // Se for unidade, salvamos o preço base. Então Total = Base * Qtd
         return acc + item.price * item.quantity;
       }
-
       if (item.product.type === 'weight' && item.weight) {
-        // Se for peso, o 'item.price' já é o valor FINAL calculado ((kg/1000) * peso)
-        // Então não multiplicamos por nada, só somamos.
         return acc + item.price;
       }
-
       return acc;
     }, 0);
 

@@ -1,4 +1,11 @@
-import { Controller, Get, Post, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Param,
+  Query,
+  DefaultValuePipe,
+  ParseIntPipe,
+} from '@nestjs/common';
 import { ProductsService } from './products.service';
 
 @Controller('products')
@@ -6,31 +13,29 @@ export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
   @Get('home')
-  async getHomeCatalog() {
-    const result = await this.productsService.getHomeCatalog();
-    return result;
+  getHomeCatalog() {
+    return this.productsService.getHomeCatalog();
   }
 
-  @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.productsService.findOne(id);
+  // Deixei essa rota antes do ':id' genérico por boa prática de roteamento
+  @Get('category/:id')
+  findCategoryProducts(
+    @Param('id') id: string,
+    @Query('limit', new DefaultValuePipe(30), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number,
+  ) {
+    return this.productsService.findCategoryProducts(id, limit, offset);
   }
 
+  // Idem aqui. Rotas com sufixos fixos (como /similar) devem vir antes
   @Get(':id/similar')
-  async getSimilar(@Param('id') id: string) {
+  getSimilar(@Param('id') id: string) {
     return this.productsService.findSimilar(id);
   }
 
-  @Get('/category/:id')
-  async findCategoryProducts(
-    @Param('id') id: string,
-    @Query('limit') limit = '30',
-    @Query('offset') offset = '0',
-  ) {
-    return this.productsService.findCategoryProducts(
-      id,
-      Number(limit),
-      Number(offset),
-    );
+  // O ':id' genérico deve ser sempre a última rota GET, para não "engolir" as outras
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.productsService.findOne(id);
   }
 }

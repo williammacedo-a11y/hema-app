@@ -1,23 +1,31 @@
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { supabase } from 'src/lib/supabase';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { supabase } from '../lib/supabase';
 
 @Injectable()
 export class CategoriesService {
-  constructor() {}
-
   async findAll() {
-    const { data, error } = await supabase
-      .from('categories') 
-      .select('id, name')
-      .order('name', { ascending: true });
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('id, name')
+        .order('name', { ascending: true });
 
-    if (error) {
-      console.error('Erro Supabase Categories:', error);
-      throw new InternalServerErrorException(
-        'Erro ao buscar categorias no banco.',
+      if (error) throw error;
+
+      return {
+        success: true,
+        message: 'Categorias listadas',
+        data: data || [],
+      };
+    } catch (error: any) {
+      throw new HttpException(
+        {
+          success: false,
+          message: 'Erro ao buscar categorias',
+          error: error.message,
+        },
+        HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
-
-    return data;
   }
 }

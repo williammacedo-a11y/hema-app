@@ -4,7 +4,6 @@ import { UpdateProfileDto, SupportTicketDto } from './dto/update-profile.dto';
 @Injectable()
 export class ProfileService {
   private supabaseUrl = process.env.SUPABASE_URL as string;
-  // Usando a chave de admin para ignorar RLS nas operações de escrita
   private supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string;
 
   private async supabaseFetch(
@@ -103,7 +102,7 @@ export class ProfileService {
     );
 
     if (Array.isArray(result) && result.length > 0) {
-      return { success: true, data: result[0] };
+      return { success: true, message: 'Perfil carregado', data: result[0] };
     }
 
     throw new HttpException(
@@ -145,10 +144,26 @@ export class ProfileService {
 
   async deleteProfile(userId: string) {
     await this.supabaseFetch(`/rest/v1/profiles?id=eq.${userId}`, 'DELETE');
-    return { success: true, message: 'Perfil deletado com sucesso' };
+    return { success: true, message: 'Sua conta foi excluída com sucesso.' };
   }
 
   async uploadAvatar(userId: string, file: Express.Multer.File) {
+    const currentProfile = await this.getProfile(userId).catch(() => null);
+    const oldAvatarUrl = currentProfile?.data?.avatar_url;
+
+    if (oldAvatarUrl) {
+      const oldFileName = oldAvatarUrl.split('/').pop();
+
+      if (oldFileName) {
+        const deletePath = `/storage/v1/object/avatars/${oldFileName}`;
+        try {
+          await this.supabaseFetch(deletePath, 'DELETE');
+        } catch (error) {
+          console.warn(`Aviso: Falha ao deletar foto antiga (${oldFileName})`);
+        }
+      }
+    }
+
     const fileName = `${userId}-${Date.now()}.jpg`;
     const path = `/storage/v1/object/avatars/${fileName}`;
 
@@ -160,8 +175,8 @@ export class ProfileService {
 
     return {
       success: true,
-      message: 'Foto atualizada!',
-      avatar_url: publicUrl,
+      message: 'Foto atualizada com sucesso!',
+      data: publicUrl,
     };
   }
 }

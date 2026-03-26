@@ -10,8 +10,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { AddressesService } from './addresses.service';
-import type { CreateAddressDTO } from './dto/create-address.dto';
-import type { UpdateAddressDTO } from './dto/update-address.dto';
+import { CreateAddressDTO } from './dto/create-address.dto';
+import { UpdateAddressDTO } from './dto/update-address.dto';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
 
 @Controller('addresses')
@@ -20,38 +20,38 @@ export class AddressesController {
 
   @Post()
   @UseGuards(SupabaseAuthGuard)
-  create(@Req() req: Request, @Body() createAddressDto: CreateAddressDTO) {
-    const userId = req['user'].sub;
+  create(@Req() req: any, @Body() createAddressDto: CreateAddressDTO) {
+    const userId = req.user.sub;
     return this.addressesService.createAddress(userId, createAddressDto);
   }
 
   @Get()
   @UseGuards(SupabaseAuthGuard)
-  findAll(@Req() req: Request) {
-    const userId = req['user'].sub;
+  findAll(@Req() req: any) {
+    const userId = req.user.sub;
     return this.addressesService.getMyAddresses(userId);
   }
 
   @Patch(':id')
   @UseGuards(SupabaseAuthGuard)
   update(
-    @Req() req: Request,
+    @Req() req: any,
     @Param('id') id: string,
     @Body() updateAddressDto: UpdateAddressDTO,
   ) {
-    const userId = req['user'].sub;
+    const userId = req.user.sub;
     return this.addressesService.updateAddress(userId, id, updateAddressDto);
+  }
+
+  @Delete(':id')
+  @UseGuards(SupabaseAuthGuard)
+  delete(@Req() req: any, @Param('id') id: string) {
+    const userId = req.user.sub;
+    return this.addressesService.deleteAddress(userId, id);
   }
 
   @Get('cep/:cep')
   getCep(@Param('cep') cep: string) {
     return this.addressesService.getAddressByCep(cep);
-  }
-
-  @Delete(':id')
-  @UseGuards(SupabaseAuthGuard)
-  delete(@Req() req: Request, @Param('id') id: string) {
-    const userId = req['user'].sub;
-    return this.addressesService.deleteAddress(userId, id);
   }
 }

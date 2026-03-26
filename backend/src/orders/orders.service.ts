@@ -1,29 +1,31 @@
 import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
-import { supabase } from 'src/lib/supabase';
+import { supabase } from '../lib/supabase';
 import { calculateDeliveryFee } from '../utils/delivery.util';
-import { processPayment } from '../payments/payment.service';
+import { PaymentsService } from '../payments/payment.service';
 import { CartService } from '../cart/cart.service';
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly cartService: CartService) {}
-  // Criar o registro na 'orders' e os itens na 'order_items'
+  constructor(
+    private readonly cartService: CartService,
+    private readonly paymentsService: PaymentsService,
+  ) {}
+
   async createOrder(userId: string, dto: CreateOrderDto) {
     try {
       // 1. Buscar o carrinho do usuário
-      const cartData = await this.cartService.getCart(userId);
-      if (!cartData.cart || cartData.items.length === 0) {
+      const cartResponse = await this.cartService.getCart(userId);
+      if (!cartResponse.data.cart || cartResponse.data.items.length === 0) {
         throw new HttpException(
-          'Carrinho vazio ou não encontrado.',
+          { success: false, message: 'Seu carrinho está vazio.' },
           HttpStatus.BAD_REQUEST,
         );
       }
 
-      const { cart, items: cartItems } = cartData;
+      const { cart, items: cartItems } = cartResponse.data;
       const isDelivery = !!dto.address_id;
 
-      // 3. Lógica de Frete e Validações de Regras de Negócio
       let deliveryFee = 0;
       if (isDelivery) {
         const { data: address, error: addressError } = await supabase
@@ -34,7 +36,7 @@ export class OrdersService {
 
         if (addressError || !address) {
           throw new HttpException(
-            'Endereço não encontrado.',
+            { success: false, message: 'Endereço de entrega não encontrado.' },
             HttpStatus.BAD_REQUEST,
           );
         }
@@ -43,13 +45,16 @@ export class OrdersService {
 
         if (deliveryFee === -1) {
           throw new HttpException(
-            'Não realizamos entregas para esta região. Selecione a opção "Retirar na loja".',
+            {
+              success: false,
+              message:
+                'Não realizamos entregas para esta região. Selecione a opção "Retirar na loja".',
+            },
             HttpStatus.BAD_REQUEST,
           );
         }
       }
 
-      // 4. Calcular os subtotais dos itens
       let calculatedTotal = 0;
 
       const orderItemsToInsert = cartItems.map((item: any) => {
@@ -77,13 +82,13 @@ export class OrdersService {
         (calculatedTotal + deliveryFee).toFixed(2),
       );
 
-      // 6. Insere o pedido principal (Order)
+      // Insere o pedido principal
       const { data: newOrder, error: orderError } = await supabase
         .from('orders')
         .insert({
           user_id: userId,
           address_id: dto.address_id || null,
-          status: 'pending', // Chumbado: acabou de nascer, tá pendente
+          status: 'pending',
           payment_status: 'pending',
           total_price: finalTotalPrice,
           delivery_fee: deliveryFee,
@@ -93,63 +98,34 @@ export class OrdersService {
         .single();
 
       if (orderError || !newOrder) {
-        console.error('Erro ao gerar a order principal:', orderError);
-        throw new HttpException(
-          'Erro interno ao gerar pedido.',
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
+        throw new Error('Falha ao inserir pedido principal.');
       }
 
-      // 7. Prepara e insere os itens do pedido com retry
+      // Prepara e insere os itens
       const itemsWithOrderId = orderItemsToInsert.map((item) => ({
         ...item,
         order_id: newOrder.id,
       }));
 
-      let itemsInserted = false;
-      let attempts = 0;
-      const maxRetries = 2;
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(itemsWithOrderId);
 
-      while (attempts <= maxRetries && !itemsInserted) {
-        const { error: itemsError } = await supabase
-          .from('order_items')
-          .insert(itemsWithOrderId);
-
-        if (!itemsError) {
-          itemsInserted = true;
-        } else {
-          attempts++;
-          console.warn(
-            `[Order ${newOrder.id}] Falha ao inserir itens (Tentativa ${attempts}/${maxRetries + 1}):`,
-            itemsError,
-          );
-          if (attempts <= maxRetries)
-            await new Promise((resolve) => setTimeout(resolve, 500));
-        }
-      }
-
-      // Rollback
-      if (!itemsInserted) {
-        console.error(
-          `🚨 Iniciando ROLLBACK: Deletando a order ${newOrder.id} órfã...`,
-        );
+      // Rollback se falhar
+      if (itemsError) {
         await supabase.from('orders').delete().eq('id', newOrder.id);
-
-        throw new HttpException(
-          'Tivemos um problema de conexão ao finalizar seu pedido. Por favor, tente novamente.',
-          HttpStatus.SERVICE_UNAVAILABLE,
-        );
+        throw new Error('Falha ao inserir itens do pedido.');
       }
 
-      // 5. Gera o status inicial baseado na forma de pagamento
-      const paymentResult = await processPayment({
+      // Processa Pagamento
+      const paymentResult = await this.paymentsService.processPayment({
         payment_method: dto.payment_method,
         total_price: finalTotalPrice,
         delivery_fee: deliveryFee,
         order_id: newOrder.id,
       });
 
-      // 8. 🔴 Limpa o carrinho APENAS se for dinheiro
+      // Limpa o carrinho APENAS se for dinheiro (os outros limpam via webhook depois)
       if (dto.payment_method === 'cash') {
         await supabase.from('cart_items').delete().eq('cart_id', cart.id);
         await supabase
@@ -159,50 +135,59 @@ export class OrdersService {
       }
 
       return {
+        success: true,
         message: 'Pedido criado com sucesso!',
-        order_id: newOrder.id,
-        status: paymentResult.orderStatus,
-        total_price: finalTotalPrice,
+        data: {
+          order_id: newOrder.id,
+          status: paymentResult.orderStatus,
+          total_price: finalTotalPrice,
+        },
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof HttpException) throw error;
       throw new HttpException(
-        'Erro interno ao processar checkout',
+        {
+          success: false,
+          message: 'Não foi possível finalizar o pedido.',
+          error: error.message,
+        },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
-  // Buscar todos os pedidos simplificados para a lista do App
   async findAllByUser(userId: string) {
-    const { data, error } = await supabase
-      .from('orders')
-      .select(
-        `
-        *,
-        order_items (
-          id,
-          product_name,
-          quantity,
-          weight,
-          subtotal
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select(
+          `
+          *,
+          order_items ( id, product_name, quantity, weight, subtotal )
+        `,
         )
-      `,
-      )
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false }); // Mais recentes primeiro
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
 
-    if (error) {
+      if (error) throw error;
+
+      return {
+        success: true,
+        message: 'Histórico carregado',
+        data,
+      };
+    } catch (error: any) {
       throw new HttpException(
-        'Erro ao buscar histórico',
+        {
+          success: false,
+          message: 'Erro ao buscar histórico',
+          error: error.message,
+        },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
-
-    return data;
   }
 
-  // Buscar detalhes de um pedido + seus itens (Join)
   async findOne(userId: string, orderId: string) {
     try {
       const { data: order, error } = await supabase
@@ -210,25 +195,8 @@ export class OrdersService {
         .select(
           `
           *,
-          order_items (
-            id,
-            product_id,
-            product_name,
-            product_price,
-            quantity,
-            weight,
-            subtotal
-          ),
-          addresses (
-            label,
-            street,
-            number,
-            complement,
-            neighborhood,
-            city,
-            state,
-            zip_code
-          )
+          order_items ( id, product_id, product_name, product_price, quantity, weight, subtotal ),
+          addresses ( label, street, number, complement, neighborhood, city, state, zip_code )
         `,
         )
         .eq('id', orderId)
@@ -237,27 +205,31 @@ export class OrdersService {
 
       if (error || !order) {
         throw new HttpException(
-          'Pedido não encontrado ou você não tem permissão para acessá-lo.',
+          { success: false, message: 'Pedido não encontrado.' },
           HttpStatus.NOT_FOUND,
         );
       }
 
-      return order;
-    } catch (error) {
+      return {
+        success: true,
+        message: 'Detalhes do pedido',
+        data: order,
+      };
+    } catch (error: any) {
       if (error instanceof HttpException) throw error;
-
-      console.error(`Erro ao buscar detalhes do pedido ${orderId}:`, error);
       throw new HttpException(
-        'Erro interno ao buscar os detalhes do pedido',
+        {
+          success: false,
+          message: 'Erro ao buscar detalhes do pedido',
+          error: error.message,
+        },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
-  // Lógica de cancelamento (Update de Status)
   async cancelOrder(userId: string, orderId: string) {
     try {
-      // 1. Buscar o pedido para checar o status e garantir que pertence ao usuário
       const { data: order, error: fetchError } = await supabase
         .from('orders')
         .select('status')
@@ -265,74 +237,57 @@ export class OrdersService {
         .eq('user_id', userId)
         .single();
 
-      // Se não achar, ou é um ID inválido ou o usuário tá tentando cancelar o pedido de outra pessoa
       if (fetchError || !order) {
         throw new HttpException(
-          'Pedido não encontrado ou acesso negado.',
+          { success: false, message: 'Pedido não encontrado.' },
           HttpStatus.NOT_FOUND,
         );
       }
 
-      // 2. Verificar se o status atual permite cancelamento
-      // Deixei em um array porque no futuro você pode adicionar 'aguardando_pagamento' aqui
       const cancelableStatuses = ['pending'];
 
       if (!cancelableStatuses.includes(order.status)) {
         throw new HttpException(
-          `Não é possível cancelar este pedido pois ele já está em processamento. (Status: ${order.status})`,
+          {
+            success: false,
+            message:
+              'Este pedido já está em processamento e não pode ser cancelado.',
+          },
           HttpStatus.CONFLICT,
         );
       }
 
-      // 3. Atualizar status para 'cancelled'
       const { error: updateError } = await supabase
         .from('orders')
         .update({ status: 'cancelled' })
         .eq('id', orderId)
         .eq('user_id', userId);
 
-      if (updateError) {
-        console.error(`Erro ao cancelar pedido ${orderId}:`, updateError);
-        throw new HttpException(
-          'Erro ao processar o cancelamento do pedido.',
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
+      if (updateError) throw updateError;
 
       return {
+        success: true,
         message: 'Pedido cancelado com sucesso.',
-        order_id: orderId,
-        new_status: 'cancelled',
+        data: { new_status: 'cancelled' },
       };
-    } catch (error) {
+    } catch (error: any) {
       if (error instanceof HttpException) throw error;
-
-      console.error(`Erro inesperado ao cancelar pedido ${orderId}:`, error);
       throw new HttpException(
-        'Erro interno ao cancelar o pedido.',
+        {
+          success: false,
+          message: 'Erro ao cancelar o pedido',
+          error: error.message,
+        },
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
-  // Função interna para ser usada pelo Webhook de Pagamento amanhã
   async updateStatus(orderId: string, status: string) {
-    // TODO: Atualizar status do pedido (ex: 'paid', 'shipped')
+    // Preparando terreno para o Webhook do Mercado Pago
   }
 
   async confirmAndPayOrder(userId: string, orderId: string, paymentData: any) {
-    // 1. Busca o pedido pelo ID
-    // 2. Envia os dados (token do cartão gerado pelo app, ou pede geração de QR code) pro Mercado Pago
-    // 3. Se o Mercado Pago aprovar:
-    /* Pseudo-código:
-  const mpResult = await mercadoPagoService.charge(...);
-  if (mpResult.status === 'approved') {
-     await supabase.from('orders').update({ status: 'paid' }).eq('id', orderId);
-     
-     // AGORA SIM APAGA O CARRINHO
-     const cart = await getUserCart(userId);
-     await supabase.from('cart_items').delete().eq('cart_id', cart.id);
-  }
-  */
+    // Placeholder para o MP
   }
 }

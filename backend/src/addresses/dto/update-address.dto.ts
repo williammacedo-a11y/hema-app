@@ -1,4 +1,7 @@
-export interface UpdateAddressDTO {
+import { PartialType } from '@nestjs/mapped-types';
+import { CreateAddressDTO } from './create-address.dto';
+
+export class UpdateAddressDTO extends PartialType(CreateAddressDTO) {
   label?: string;
   street?: string;
   number?: string;
@@ -9,4 +12,3 @@ export interface UpdateAddressDTO {
   zip_code?: string;
   is_default?: boolean;
 }
-
