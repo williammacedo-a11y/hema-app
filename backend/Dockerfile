@@ -34,8 +34,5 @@ RUN addgroup -g 1001 -S nodejs && \
 
 USER nestjs
 
-# Porta padrão do NestJS
-EXPOSE 3006
-
 # Comando para iniciar a aplicação
 CMD ["node", "dist/main.js"]
